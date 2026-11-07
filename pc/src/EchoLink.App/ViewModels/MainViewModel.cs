@@ -62,6 +62,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _captureModeText = "-";
     private string _keepAliveModeText = "-";
     private string _enginePeriodText = "-";
+    private string _enginePeriodHint = "决定抓取延迟下限";
     private string _bufferText = "-";
     private string _framesPerCallbackText = "-";
     private string _packetsSentText = "0";
@@ -303,6 +304,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _enginePeriodText, value);
     }
 
+    /// <summary>引擎周期这一行的提示文字：端点能给多大粒度直接影响可达延迟。</summary>
+    public string EnginePeriodHint
+    {
+        get => _enginePeriodHint;
+        private set => Set(ref _enginePeriodHint, value);
+    }
+
     public string BufferText
     {
         get => _bufferText;
@@ -527,6 +535,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CaptureModeText = "-";
         KeepAliveModeText = "-";
         EnginePeriodText = "-";
+        EnginePeriodHint = "决定抓取延迟下限";
         BufferText = "-";
         FramesPerCallbackText = "-";
         PacketsSentText = "0";
@@ -613,7 +622,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     var isDefault = device.ID == defaultId;
                     var isVirtual = LooksVirtual(device.FriendlyName);
                     var name = device.FriendlyName + (isDefault ? "  · 默认" : string.Empty) + (isVirtual ? "  · 虚拟" : string.Empty);
-                    Devices.Add(new DeviceItem(name, device.ID, isDefault, isVirtual));
+                    // 只读探测该端点的最小引擎周期：它决定抓取粒度，进而决定低延迟上限。
+                    // 板载声卡常见 2.67 ms；虚拟声卡与 HDMI 通常只有 10 ms。
+                    var probe = EnginePeriodProbe.Probe(device.ID, device.FriendlyName);
+                    Devices.Add(new DeviceItem(name, device.ID, isDefault, isVirtual, probe.MinMs, probe.DefaultMs));
                 }
                 catch (Exception ex)
                 {
@@ -754,9 +766,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DeviceFormatText = snapshot.CaptureFormat;
         CaptureModeText = snapshot.CaptureMode;
         KeepAliveModeText = snapshot.KeepAliveMode;
-        EnginePeriodText = snapshot.CaptureEnginePeriodMs > 0
-            ? $"{snapshot.CaptureEnginePeriodMs:F2} ms"
-            : "-";
+        // 显示**实际观测到的**投递粒度，而不是我们请求的周期：
+        // 板载声卡上请求 10 ms 兜底、实际却按 2.67 ms 投递（路径 B 把引擎周期拉低了），
+        // 只报请求值会严重误导调参。
+        var observedPeriodMs = snapshot.MaxFramesPerCallback > 0 && snapshot.CaptureSampleRate > 0
+            ? snapshot.MaxFramesPerCallback * 1000.0 / snapshot.CaptureSampleRate
+            : 0;
+        EnginePeriodText = observedPeriodMs > 0
+            ? $"{observedPeriodMs:F2} ms"
+            : snapshot.CaptureEnginePeriodMs > 0
+                ? $"{snapshot.CaptureEnginePeriodMs:F2} ms"
+                : "-";
+
+        EnginePeriodHint = observedPeriodMs > 0 && observedPeriodMs <= 3.0
+            ? "板载小周期"
+            : observedPeriodMs > 9.0
+                ? "该端点仅 10 ms；换板载声卡可更低"
+                : "决定抓取延迟下限";
         BufferText = snapshot.CaptureBufferFrames > 0
             ? $"{snapshot.CaptureBufferFrames} 帧"
             : "-";

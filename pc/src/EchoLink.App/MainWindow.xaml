@@ -112,7 +112,7 @@
 
                             <controls:MetricRow Label="设备格式" Value="{Binding DeviceFormatText}" />
                             <controls:MetricRow Label="抓取模式" Value="{Binding CaptureModeText}" />
-                            <controls:MetricRow Label="引擎周期" Value="{Binding EnginePeriodText}" Hint="决定抓取延迟下限" />
+                            <controls:MetricRow Label="抓取粒度" Value="{Binding EnginePeriodText}" Hint="{Binding EnginePeriodHint}" />
                             <controls:MetricRow Label="抓取缓冲" Value="{Binding BufferText}" />
                             <controls:MetricRow Label="每回调帧数" Value="{Binding FramesPerCallbackText}" />
                             <controls:MetricRow Label="保活流" Value="{Binding KeepAliveModeText}" />

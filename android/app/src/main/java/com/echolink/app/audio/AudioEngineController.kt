@@ -50,6 +50,10 @@ class AudioEngineController(
     private var settings = ReceiverSettings()
     private var startedAtMs = 0L
     private var lastUnderrunEvents = 0L
+    private var lastUnderrunActionMs = 0L
+    private var lastPrefillRequestMs = 0L
+    private var bufferBursts = START_BUFFER_BURSTS
+    private val waterMinWindow = ArrayDeque<Double>(WATER_WINDOW_TICKS + 1)
     private var lastCallbackCount = -1L
     private var lastCallbackAdvanceMs = 0L
     private var reopenCount = 0
@@ -61,6 +65,7 @@ class AudioEngineController(
     private var tick = 0
 
     private var targetWaterMs = 30.0
+    private var waterMinMs = 0.0
     private var jitterP99Ms = 0.0
     private var jitterP50Ms = 0.0
     private var controlWarm = false
@@ -93,6 +98,10 @@ class AudioEngineController(
             latency.reset()
             paramWarnings.clear()
             lastUnderrunEvents = 0
+            lastUnderrunActionMs = 0
+            lastPrefillRequestMs = 0
+            bufferBursts = START_BUFFER_BURSTS
+            waterMinWindow.clear()
             lastCallbackCount = -1
             firstPacketSeen = false
             waterHistory.clear()
@@ -194,20 +203,28 @@ class AudioEngineController(
         val underrunDelta = stats.underrunEvents - lastUnderrunEvents
         lastUnderrunEvents = stats.underrunEvents
 
-        val elapsedSeconds = (SystemClock.elapsedRealtime() - startedAtMs) / 1000.0
+        // 控制量：最近 1 秒内水位的最小值。
+        // 原生的 kWaterMinFrames 覆盖“上次读取到现在”（≈50 ms，足以跨过多个发包批次），
+        // 这里再取 20 个周期（1 s）的最小值，得到对锯齿低谷的稳健估计。
+        waterMinWindow.addLast(stats.waterMinMs)
+        while (waterMinWindow.size > WATER_WINDOW_TICKS) {
+            waterMinWindow.removeFirst()
+        }
+
+        val windowMinMs = waterMinWindow.min()
+        val nowMs = SystemClock.elapsedRealtime()
+
         // 目标水位模式允许运行中热切换；端口/独占模式需要重开流，只在 start 时读取
         val live = EchoLinkStateHolder.liveSettings
         val fixedTarget = if (live.autoTargetWater) null else live.manualTargetWaterMs.toDouble()
 
         val decision = latency.update(
-            waterMs = stats.waterMs,
-            elapsedSeconds = elapsedSeconds,
+            waterMinMs = windowMinMs,
+            waterAvgMs = stats.waterMs,
             underrunDelta = underrunDelta,
             framesPerBurst = stats.framesPerBurst,
+            bufferMs = stats.bufferMs,
             fixedTargetMs = fixedTarget,
-            // 环里至少要能填满一次回调可能取走的量，再留 15% 抖动余量。
-            // PHJ110：Oboe 缓冲 21.3 ms → 下限约 24.5 ms（而不是固定 20 ms）。
-            dynamicMinWaterMs = stats.bufferMs.takeIf { it > 0.0 }?.times(1.15),
         )
 
         activeEngine.setTargetWaterFrames(decision.targetFrames)
@@ -216,10 +233,11 @@ class AudioEngineController(
         targetWaterMs = decision.targetMs
         jitterP99Ms = decision.jitterP99Ms
         jitterP50Ms = decision.jitterP50Ms
-        controlWarm = decision.warm
+        waterMinMs = windowMinMs
+        controlWarm = stats.prefillFrames > 0 && !stats.prefillActive
 
         if (underrunDelta > 0) {
-            log("欠载 ${underrunDelta} 次，目标水位上调到 ${"%.1f".format(decision.targetMs)} ms")
+            handleUnderrun(activeEngine, windowMinMs, decision.targetMs, nowMs)
         }
 
         pushWaterHistory(stats.waterMs)
@@ -238,6 +256,45 @@ class AudioEngineController(
         }
 
         publish(statusTextFor(phase, network))
+    }
+
+    /**
+     * 欠载处理（去抖）。
+     *
+     * 原先每 50 ms 就记一次日志、并且靠重采样比率（τ≈5 s）慢慢把水位抬回来，
+     * 结果一次持续故障会刷出几千条日志，而且恢复要十几秒。
+     * 现在改为：1 秒内最多处理一次；水位掉到目标一半以下就直接重走垫水位（几十毫秒静音），
+     * 否则按 burst 递增 Oboe 缓冲（LatencyTuner 式）。
+     */
+    private fun handleUnderrun(
+        activeEngine: NativeAudioEngine,
+        windowMinMs: Double,
+        targetMs: Double,
+        nowMs: Long,
+    ) {
+        if (nowMs - lastUnderrunActionMs < UNDERRUN_DEBOUNCE_MS) {
+            return
+        }
+
+        lastUnderrunActionMs = nowMs
+
+        if (windowMinMs < targetMs * 0.5) {
+            if (nowMs - lastPrefillRequestMs >= UNDERRUN_DEBOUNCE_MS) {
+                lastPrefillRequestMs = nowMs
+                activeEngine.requestPrefill()
+                log("欠载且水位低于目标一半（最小 ${"%.1f".format(windowMinMs)} ms），重新垫水位")
+            }
+
+            return
+        }
+
+        if (bufferBursts < MAX_BUFFER_BURSTS) {
+            bufferBursts++
+            val frames = activeEngine.setBufferSizeInBursts(bufferBursts)
+            log("欠载，Oboe 缓冲上调到 $bufferBursts burst（实际 $frames 帧）")
+        } else {
+            log("欠载（水位最小 ${"%.1f".format(windowMinMs)} ms / 目标 ${"%.1f".format(targetMs)} ms），缓冲已达上限")
+        }
     }
 
     private fun watchdogTick() {
@@ -381,9 +438,11 @@ class AudioEngineController(
                 network = network,
                 settings = EchoLinkStateHolder.liveSettings,
                 targetWaterMs = targetWaterMs,
+                waterMinMs = waterMinMs,
                 jitterP99Ms = jitterP99Ms,
                 jitterP50Ms = jitterP50Ms,
                 controlWarm = controlWarm,
+                bufferBursts = bufferBursts,
                 reopenCount = reopenCount,
                 lastReopenReason = lastReopenReason,
                 paramWarnings = paramWarnings.toList(),
@@ -422,6 +481,16 @@ class AudioEngineController(
         const val START_WATER_MS = 30.0
         const val HISTORY_POINTS = 400
         const val MAX_LOG_LINES = 120
+
+        /** 控制量窗口：20 个 50 ms 周期 = 1 s */
+        const val WATER_WINDOW_TICKS = 20
+
+        /** 欠载处理去抖：1 秒内只处理一次 */
+        const val UNDERRUN_DEBOUNCE_MS = 1_000L
+
+        /** Oboe 缓冲起始 burst 数，以及允许上调到的上限 */
+        const val START_BUFFER_BURSTS = 2
+        const val MAX_BUFFER_BURSTS = 4
 
         /** oboe::Result::ErrorUnimplemented。独占（MMAP）下缓冲由驱动固定时返回，属正常情况。 */
         const val OBOE_ERROR_UNIMPLEMENTED = -898

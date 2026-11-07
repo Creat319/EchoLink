@@ -23,11 +23,12 @@ constexpr int32_t kBeepFadeFrames = 480;          // 10 ms 淡入淡出
 // 注意：不能叫 kChannels —— StatsIndex 里已经有一个同名枚举值，会变成二义引用
 constexpr int32_t kOutputChannels = 2;
 
-// PC 端按 10 ms 引擎周期成批投递，Oboe 只给 2 个 burst 时正好卡在批与批之间。
-// 这里强行把 Oboe 内部缓冲拉到 ≥4 个 burst（PHJ110 上 256×4 = 1024 帧 ≈ 21 ms）。
-constexpr int32_t kBurstsPerBuffer = 4;
+// Oboe 内部缓冲的起始大小（单位：burst）。AAudio 的回调尺寸 <= burst，
+// 所以 2 个 burst 足够；真出现 xrun 时由 Kotlin 侧按 burst 往上加（LatencyTuner 式）。
+// 早期版本用 4 个 burst 是为了防“一次回调要整个缓冲”，实测不成立（见 maxCallbackFrames）。
+constexpr int32_t kBurstsPerBuffer = 2;
 constexpr int32_t kMinBufferCapacityFrames = 1024;
-constexpr int32_t kMinBufferMillis = 20;
+constexpr int32_t kGapFadeFrames = 48;  // 1 ms @48k：缺包静音洞两端的淡出/淡入长度
 
 inline int64_t nowNanos() {
     timespec ts{};
@@ -134,6 +135,37 @@ void AudioEngine::playBeep() {
     _beepFramesRemaining.store(kBeepFrames, std::memory_order_relaxed);
 }
 
+int32_t AudioEngine::setBufferSizeInBursts(int32_t bursts) {
+    std::lock_guard<std::mutex> lock(_controlMutex);
+    if (!_stream) {
+        return -1;
+    }
+
+    const int32_t burst = _stream->getFramesPerBurst();
+    if (burst <= 0 || bursts <= 0) {
+        return -1;
+    }
+
+    int32_t desired = burst * bursts;
+    const int32_t capacity = _stream->getBufferCapacityInFrames();
+    if (capacity > 0) {
+        desired = std::min(desired, capacity);
+    }
+
+    if (desired <= _stream->getBufferSizeInFrames()) {
+        return 0;  // 不需要改（独占模式下往往也改不动）
+    }
+
+    const oboe::ResultWithValue<int32_t> result = _stream->setBufferSizeInFrames(desired);
+    const oboe::Result status = result;
+    _bufferSetResult.store(static_cast<int32_t>(status));
+    _bufferSizeFrames.store(_stream->getBufferSizeInFrames());
+
+    LOGI("bump buffer to %d bursts -> %d frames (%s)", bursts, _stream->getBufferSizeInFrames(),
+         oboe::convertToText(status));
+    return status == oboe::Result::OK ? _stream->getBufferSizeInFrames() : -2;
+}
+
 int32_t AudioEngine::openStreamLocked(bool exclusive) {
     _requestedExclusive.store(exclusive ? 1 : 0);
     _exclusiveDeniedCode.store(0);
@@ -233,11 +265,12 @@ int32_t AudioEngine::openStreamLocked(bool exclusive) {
              actualChannels, static_cast<int>(format), kOutputChannels);
     }
 
-    // ---- Oboe 内部缓冲：至少 4 个 burst 且不少于 20 ms ----
-    // 这是本次调优的核心：PC 端每 10 ms 才投递一批包，缓冲若只有 2 个 burst（PHJ110 上 10.7 ms）
-    // 就会在批与批之间读空 → 欠载。把缓冲拉到 4 个 burst（≈21 ms）才有余量跨过发包间隔。
+    // ---- Oboe 内部缓冲：2 个 burst ----
+    // AAudio 保证回调尺寸 <= burst，所以 2 个 burst 就是官方推荐的低延迟起点。
+    // 早期版本压到 4 个 burst（≈21 ms）是基于“回调可能一次取整个缓冲”的错误假设；
+    // 现在把真实回调尺寸暴露成 kMaxCallbackFrames，可随时证伪。
     const int32_t rateForMs = actualRate > 0 ? actualRate : _requestedSampleRate;
-    int32_t desired = std::max(burst * kBurstsPerBuffer, rateForMs * kMinBufferMillis / 1000);
+    int32_t desired = burst * kBurstsPerBuffer;
     if (capacity > 0) {
         desired = std::min(desired, capacity);
     }
@@ -306,6 +339,22 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* /*stream*/
 
     _callbackCount.fetch_add(1, std::memory_order_relaxed);
 
+    // 验证 AAudio 的回调尺寸是否 <= burst（Claude 指出的检查点）
+    if (numFrames > _maxCallbackFrames.load(std::memory_order_relaxed)) {
+        _maxCallbackFrames.store(numFrames, std::memory_order_relaxed);
+    }
+
+    // 闭环控制量：回调入口处的水位最小值。
+    // PC 端成批投递时水位是锯齿，控制最小值才有物理意义（平均值会高估约半个批次）。
+    {
+        const int64_t water = static_cast<int64_t>(_ring.writeFrame()) -
+                              static_cast<int64_t>(std::floor(_readPos));
+        int64_t current = _waterMinSinceRead.load(std::memory_order_relaxed);
+        while (water < current &&
+               !_waterMinSinceRead.compare_exchange_weak(current, water, std::memory_order_relaxed)) {
+        }
+    }
+
     readFrames(out, numFrames);
     mixBeep(out, numFrames);
 
@@ -343,12 +392,15 @@ int32_t AudioEngine::readFrames(int16_t* out, int32_t frames) {
         _readPos = static_cast<double>(writeHead);
     }
 
-    // ---- 启动垫水位（本次真机调优的关键补丁）----
-    // 消费端如果从第 0 帧就开始读，水位会收敛到“刚好够一次回调”的临界点，
-    // 而不是目标水位：PHJ110 上实测水位恒为 ~10.2 ms 而目标 22.2 ms，
-    // 于是每批包之间都欠载（2475 次，每次只差 0.3 ms）。这里先不消费，等环里攒够 target。
+    // ---- 启动垫水位 ----
+    // 消费端如果从第 0 帧就开始读，水位会收敛到“刚好够一次回调”的临界点，而不是目标水位：
+    // PHJ110 上实测水位恒为 ~10.2 ms 而目标 22.2 ms，于是每批包之间都欠载（2475 次，每次只差 0.3 ms）。
+    // 新语义：target 现在表示**窗口最小值**的目标（而不是平均值），见 LatencyController；
+    // 所以垫水位要多垫“一个发包批次”，让锯齿的低谷刚好落在 target 上。
     if (_prefillPending.load(std::memory_order_relaxed)) {
-        const int32_t need = target > 0 ? target : 1440;
+        const int32_t minTarget = target > 0 ? target : 960;
+        const int32_t batch = _framesPerBurst.load(std::memory_order_relaxed) * 2;  // 一个批次 ≈ 2 burst
+        const int32_t need = minTarget + (batch > 0 ? batch : 480);
         const int64_t level = static_cast<int64_t>(writeHead) - static_cast<int64_t>(_readPos);
         if (level < static_cast<int64_t>(need) + frames + 2) {
             std::memset(out, 0, static_cast<size_t>(frames) * 2 * sizeof(int16_t));
@@ -358,13 +410,26 @@ int32_t AudioEngine::readFrames(int16_t* out, int32_t frames) {
         }
 
         _prefillPending.store(false, std::memory_order_relaxed);
-        LOGI("prefill done: water=%lld frames (target %d)", static_cast<long long>(level), need);
+        LOGI("prefill done: water=%lld frames (min target %d)", static_cast<long long>(level), minTarget);
     }
 
-    // 积压保护：超过 2 倍目标水位才丢帧，丢完做 2.5 ms 淡入，避免咔哒声
+    // 积压保护：超过 target + 3 个 burst 才丢帧，带迟滞（回到 target + 1 burst 以内才解除），
+    // 避免在阈值附近反复丢帧。丢完做 2.5 ms 淡入。
     if (target > 0) {
+        const int32_t burst = _framesPerBurst.load(std::memory_order_relaxed) > 0
+                                  ? _framesPerBurst.load(std::memory_order_relaxed)
+                                  : 240;
         const double level = static_cast<double>(writeHead) - _readPos;
-        if (level > 2.0 * static_cast<double>(target)) {
+        const double trigger = static_cast<double>(target) + 3.0 * burst;
+        const double release = static_cast<double>(target) + 1.0 * burst;
+
+        if (!_dropActive && level > trigger) {
+            _dropActive = true;
+        } else if (_dropActive && level < release) {
+            _dropActive = false;
+        }
+
+        if (_dropActive) {
             const double skipTo = static_cast<double>(writeHead) - static_cast<double>(target);
             if (skipTo > _readPos) {
                 _dropFrames.fetch_add(static_cast<uint64_t>(skipTo - _readPos), std::memory_order_relaxed);
@@ -481,8 +546,15 @@ void AudioEngine::pushFrames(int64_t refFrameIndex, const int16_t* pcm, int32_t 
             _requestedReadPos.store(static_cast<int64_t>(_ring.writeFrame()), std::memory_order_release);
             _prefillPending.store(true, std::memory_order_relaxed);
         } else {
+            // 缺包补静音：在静音洞两端各做 1 ms 淡出/淡入，避免硬切造成的咔哒声。
+            const uint64_t gapStart = _ring.writeFrame();
+            if (gapStart > static_cast<uint64_t>(kGapFadeFrames)) {
+                _ring.fadeRange(gapStart - static_cast<uint64_t>(kGapFadeFrames), kGapFadeFrames, 1.0f, 0.0f);
+            }
+
             _ring.writeSilence(static_cast<int32_t>(gap));
             _silenceFilled.fetch_add(gap, std::memory_order_relaxed);
+            _pendingFadeIn = kGapFadeFrames;
         }
 
         _expectedRef = ref;
@@ -522,7 +594,16 @@ void AudioEngine::pushFrames(int64_t refFrameIndex, const int16_t* pcm, int32_t 
         return;
     }
 
+    const uint64_t packetStart = _ring.writeFrame();
     _ring.writeInterleaved(pcm + offset * 2, count);
+
+    // 补过静音之后，新数据的开头也要淡入，否则从静音切回音频会有咔哒声
+    if (_pendingFadeIn > 0 && count > 0) {
+        const int32_t fade = _pendingFadeIn < count ? _pendingFadeIn : count;
+        _ring.fadeRange(packetStart, fade, 0.0f, 1.0f);
+        _pendingFadeIn = 0;
+    }
+
     _expectedRef += static_cast<uint64_t>(count);
 }
 
@@ -581,6 +662,11 @@ void AudioEngine::fillStats(double* out, int32_t length) {
     out[kOpenAttempts] = static_cast<double>(_openAttempts.load(std::memory_order_relaxed));
     out[kExclusiveDeniedCode] = static_cast<double>(_exclusiveDeniedCode.load(std::memory_order_relaxed));
     out[kPrefillFrames] = static_cast<double>(_prefillFrames.load(std::memory_order_relaxed));
+    // 取走并重置区间最小值（读-改-写，控制线程每 50 ms 调一次）
+    const int64_t waterMin = _waterMinSinceRead.exchange(INT64_MAX, std::memory_order_relaxed);
+    out[kWaterMinFrames] = waterMin == INT64_MAX ? static_cast<double>(water) : static_cast<double>(waterMin);
+    out[kMaxCallbackFrames] = static_cast<double>(_maxCallbackFrames.load(std::memory_order_relaxed));
+    out[kPrefillActive] = _prefillPending.load(std::memory_order_relaxed) ? 1.0 : 0.0;
 }
 
 }  // namespace echolink

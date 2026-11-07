@@ -31,6 +31,7 @@ public sealed class EchoLinkSnapshot
     public double CaptureEnginePeriodMs { get; init; }
     public double KeepAliveEnginePeriodMs { get; init; }
     public int CaptureBufferFrames { get; init; }
+    public int CaptureSampleRate { get; init; }
     public int MinFramesPerCallback { get; init; }
     public int MaxFramesPerCallback { get; init; }
     public int LastFramesPerCallback { get; init; }
@@ -146,7 +147,10 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
 
         var info = _capture.EngineInfo ?? throw new InvalidOperationException("环回抓取没有返回引擎信息");
         _resampler = new StreamingResampler(info.Format.SampleRate);
-        _packetizer = new Packetizer(this, sampleCount => (uint)(((ulong)(_clock.ElapsedMilliseconds * 1000)) + (sampleCount * 1000UL / 48UL)));
+        // 时间戳用**真实发送时刻**（QPC 微秒），不再是 sampleCount 推导出的名义时间。
+        // 名义时间戳是 sampleCount 的函数，信息冗余；换成发送时刻后，接收端做差分会自然消掉
+        // PC 侧的成批投递延迟，只留下链路与调度抖动，才能区分“PC 卡了”和“网络卡了”。
+        _packetizer = new Packetizer(this, _ => (uint)(_clock.Elapsed.TotalMilliseconds * 1000.0));
 
         if (!string.IsNullOrWhiteSpace(_options.WavDumpPath))
         {
@@ -278,6 +282,7 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             CaptureEnginePeriodMs = info?.EnginePeriodMs ?? 0,
             KeepAliveEnginePeriodMs = keepAlive?.EngineInfo?.EnginePeriodMs ?? 0,
             CaptureBufferFrames = (int)(info?.BufferFrames ?? 0),
+            CaptureSampleRate = info?.Format.SampleRate ?? 0,
             MinFramesPerCallback = counters?.MinFramesPerCallback is > 0 and < int.MaxValue ? counters.MinFramesPerCallback : 0,
             MaxFramesPerCallback = counters?.MaxFramesPerCallback ?? 0,
             LastFramesPerCallback = counters?.LastFramesPerCallback ?? 0,

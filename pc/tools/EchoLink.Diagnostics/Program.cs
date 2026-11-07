@@ -29,6 +29,7 @@ internal static class Program
             return command switch
             {
                 "devices" => ListDevices(),
+                "periods" => ListPeriods(),
                 "targets" => ListTargets(),
                 "capture" => CaptureAndDump(options),
                 "echo" => EchoSelfTest(options),
@@ -50,6 +51,7 @@ internal static class Program
             EchoLink 诊断工具
 
               devices                          列出所有活动渲染端点（含默认端点标记）
+              periods                          查询每个端点能否拿到 <10 ms 的共享引擎周期（只读探测）
               targets                          USB 网络共享候选地址（取网关，不写死 IP）
               capture [--device 关键字] [--seconds 5] [--out dump.wav] [--mode auto|legacy|a]
                                                环回抓取 → 重采样 48k → 写 WAV，并打印引擎周期/回调统计
@@ -127,8 +129,49 @@ internal static class Program
         return 0;
     }
 
-    private static int ListTargets()
+    private static int ListPeriods()
     {
+        using var enumerator = new MMDeviceEnumerator();
+        var results = new List<EndpointPeriods>();
+
+        foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+        {
+            string id;
+            string name;
+            try
+            {
+                id = device.ID;
+                name = device.FriendlyName;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("  跳过无法读取的端点: " + ex.Message);
+                continue;
+            }
+
+            var probe = EnginePeriodProbe.Probe(id, name);
+            results.Add(probe);
+            Console.WriteLine("  " + probe);
+        }
+
+        Console.WriteLine();
+        var small = results.Where(r => r.SupportsSmallPeriod).ToList();
+        if (small.Count == 0)
+        {
+            Console.WriteLine("结论: 所有端点都不支持 <10 ms 的共享引擎周期（本机只能吃 10 ms 兜底）。");
+            return 1;
+        }
+
+        Console.WriteLine("结论: 以下端点可尝试 IAudioClient3 小周期路径：");
+        foreach (var p in small)
+        {
+            Console.WriteLine($"  {p.FriendlyName}  min {p.MinMs:F2} ms");
+        }
+
+        return 0;
+    }
+
+    private static int ListTargets()    {
         var candidates = TargetDiscovery.DiscoverCandidates();
         if (candidates.Count == 0)
         {
@@ -457,7 +500,6 @@ internal sealed class LoopbackSink
     private readonly int _port;
     private readonly bool _replyReports;
     private readonly long[] _intervalBuckets = new long[BucketCount];
-
     private UdpClient? _client;
     private Thread? _thread;
     private volatile bool _stop;
@@ -472,6 +514,60 @@ internal sealed class LoopbackSink
 
     private double _lastReportMs;
     private int _cachedP99Us;
+
+    // 抖动差分对比：真实发送时刻 vs 旧的名义时间戳
+    private readonly long[] _realJitterBuckets = new long[BucketCount];
+    private readonly long[] _nominalJitterBuckets = new long[BucketCount];
+    private long _realJitterCount;
+    private long _nominalJitterCount;
+    private double _realJitterMaxMs;
+    private double _nominalJitterMaxMs;
+    private uint _lastTimestampUs;
+    private ulong _lastNominalUs;
+    private bool _hasTimestamp;
+
+    private static void RecordJitter(long[] buckets, ref long count, ref double maxMs, double valueMs)
+    {
+        if (valueMs > maxMs)
+        {
+            maxMs = valueMs;
+        }
+
+        var bucket = (int)(valueMs * BucketPerMillisecond);
+        if (bucket >= BucketCount)
+        {
+            bucket = BucketCount - 1;
+        }
+
+        if (bucket < 0)
+        {
+            bucket = 0;
+        }
+
+        buckets[bucket]++;
+        count++;
+    }
+
+    private static double PercentileOf(long[] buckets, long count, double percentile)
+    {
+        if (count == 0)
+        {
+            return 0.0;
+        }
+
+        var target = (long)(count * percentile);
+        long cumulative = 0;
+        for (var i = 0; i < buckets.Length; i++)
+        {
+            cumulative += buckets[i];
+            if (cumulative >= target)
+            {
+                return (i + 1) / (double)BucketPerMillisecond;
+            }
+        }
+
+        return buckets.Length / (double)BucketPerMillisecond;
+    }
 
     public LoopbackSink(int port, bool replyReports)
     {
@@ -540,9 +636,11 @@ internal sealed class LoopbackSink
             }
 
             var arrivalMs = clock.Elapsed.TotalMilliseconds;
+            double intervalMs = 0;
             if (_lastArrivalMs > 0)
             {
                 var interval = arrivalMs - _lastArrivalMs;
+                intervalMs = interval;
                 if (interval > _maxIntervalMs)
                 {
                     _maxIntervalMs = interval;
@@ -614,6 +712,28 @@ internal sealed class LoopbackSink
 
             _lastSequence = header.Sequence;
             _expectedSampleCount = header.SampleCount + PacketFormat.FramesPerPacket;
+
+            // ---- 抖动差分 d_i = Δ到达 − Δ时间戳（手机端用的就是这个量）----
+            // 这里同时算两套：真实发送时刻（现在的实现）和名义时间戳（sampleCount 推导，旧实现），
+            // 一次运行就能对比两者把多少 PC 侧抖动带进了控制量。
+            var timestampUs = header.TimestampMicros;
+            var nominalUs = header.SampleCount * 1_000_000UL / (ulong)PacketFormat.SampleRate;
+
+            if (_hasTimestamp)
+            {
+                var deltaArrivalMs = intervalMs;
+                var deltaRealUs = unchecked((int)(timestampUs - _lastTimestampUs));
+                var deltaNominalUs = unchecked((long)(nominalUs - _lastNominalUs));
+
+                RecordJitter(_realJitterBuckets, ref _realJitterCount, ref _realJitterMaxMs,
+                    Math.Abs(deltaArrivalMs - (deltaRealUs / 1000.0)));
+                RecordJitter(_nominalJitterBuckets, ref _nominalJitterCount, ref _nominalJitterMaxMs,
+                    Math.Abs(deltaArrivalMs - (deltaNominalUs / 1000.0)));
+            }
+
+            _lastTimestampUs = timestampUs;
+            _lastNominalUs = nominalUs;
+            _hasTimestamp = true;
 
             if (_replyReports && arrivalMs - _lastReportMs >= ReportIntervalMs)
             {
@@ -690,6 +810,9 @@ internal sealed class LoopbackSink
               非零采样 {NonZeroSamples}，峰值 {_peakAbs / 32768.0:F3}，回报已发 {ReportsSent}，
               到达间隔 P50 {PercentileMillis(0.50):F2}ms / P90 {PercentileMillis(0.90):F2}ms / P99 {PercentileMillis(0.99):F2}ms / 最大 {_maxIntervalMs:F2}ms，
               实际速率 {(duration <= 0 ? 0 : Packets / duration):F1} 包/秒
+            抖动差分 |d_i| = |Δ到达 − Δ时间戳|（手机端控制量）：
+              真实发送时刻  P50 {PercentileOf(_realJitterBuckets, _realJitterCount, 0.50):F2}ms / P90 {PercentileOf(_realJitterBuckets, _realJitterCount, 0.90):F2}ms / P99 {PercentileOf(_realJitterBuckets, _realJitterCount, 0.99):F2}ms / 最大 {_realJitterMaxMs:F2}ms，
+              旧名义时间戳  P50 {PercentileOf(_nominalJitterBuckets, _nominalJitterCount, 0.50):F2}ms / P90 {PercentileOf(_nominalJitterBuckets, _nominalJitterCount, 0.90):F2}ms / P99 {PercentileOf(_nominalJitterBuckets, _nominalJitterCount, 0.99):F2}ms / 最大 {_nominalJitterMaxMs:F2}ms，
             首个包头（互操作向量）: {FirstHeaderHex}
             首个包载荷前 8 字节    : {FirstPayloadHex}
             """;

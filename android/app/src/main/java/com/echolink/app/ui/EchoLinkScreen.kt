@@ -214,20 +214,25 @@ private fun WaterCard(state: ReceiverState) {
             targetMs = state.targetWaterMs.toFloat(),
         )
         Spacer(Modifier.height(8.dp))
+        MetricRow(
+            "水位最低值",
+            String.format(Locale.US, "%.2f ms", state.waterMinMs),
+            valueColor = if (state.waterMinMs < state.targetWaterMs * 0.6 && state.targetWaterMs > 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            hint = "闭环控制量",
+        )
         MetricRow("当前水位", String.format(Locale.US, "%.2f ms", state.engine.waterMs))
-        MetricRow("目标水位", String.format(Locale.US, "%.2f ms", state.targetWaterMs))
+        MetricRow("目标（低谷）", String.format(Locale.US, "%.2f ms", state.targetWaterMs))
         MetricRow(
             "重采样比率",
             String.format(Locale.US, "%+.4f %%", (state.engine.ratio - 1.0) * 100.0),
             hint = "限 ±0.1%",
         )
         MetricRow("链路抖动 P50", String.format(Locale.US, "%.2f ms", state.jitterP50Ms))
-        MetricRow("链路抖动 P99", String.format(Locale.US, "%.2f ms", state.jitterP99Ms))
-        MetricRow(
-            "自适应状态",
-            if (state.controlWarm) "已收敛（P99+5）" else "起步 30 ms",
-            valueColor = if (state.controlWarm) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
-        )
+        MetricRow("链路抖动 P99", String.format(Locale.US, "%.2f ms", state.jitterP99Ms), hint = "仅展示")
     }
 }
 
@@ -240,12 +245,17 @@ private fun StreamCard(state: ReceiverState) {
         MetricRow(
             "Oboe 缓冲",
             "${state.engine.bufferSizeFrames} 帧 / ${String.format(Locale.US, "%.1f", state.engine.bufferMs)} ms",
-            valueColor = if (state.engine.bufferMs >= 15.0) {
+            valueColor = if (state.bufferBursts <= 2) {
                 MaterialTheme.colorScheme.secondary
             } else {
                 MaterialTheme.colorScheme.tertiary
             },
-            hint = "容量 ${state.engine.bufferCapacityFrames}",
+            hint = "${state.bufferBursts} burst",
+        )
+        MetricRow(
+            "回调帧数上限",
+            if (state.engine.maxCallbackFrames > 0) "${state.engine.maxCallbackFrames} 帧" else "-",
+            hint = "应 ≤ burst",
         )
         MetricRow(
             "共享模式",

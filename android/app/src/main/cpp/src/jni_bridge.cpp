@@ -116,6 +116,21 @@ Java_com_echolink_app_audio_NativeAudioEngine_nativePlayBeep(JNIEnv* /*env*/, jo
 }
 
 JNIEXPORT void JNICALL
+Java_com_echolink_app_audio_NativeAudioEngine_nativeRequestPrefill(JNIEnv* /*env*/, jobject /*self*/, jlong handle) {
+    auto* engine = engineOf(handle);
+    if (engine != nullptr) {
+        engine->requestPrefill();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_echolink_app_audio_NativeAudioEngine_nativeSetBufferSizeInBursts(
+        JNIEnv* /*env*/, jobject /*self*/, jlong handle, jint bursts) {
+    auto* engine = engineOf(handle);
+    return engine == nullptr ? -1 : engine->setBufferSizeInBursts(bursts);
+}
+
+JNIEXPORT void JNICALL
 Java_com_echolink_app_audio_NativeAudioEngine_nativeResetRing(JNIEnv* /*env*/, jobject /*self*/, jlong handle) {
     auto* engine = engineOf(handle);
     if (engine != nullptr) {

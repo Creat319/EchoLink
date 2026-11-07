@@ -54,6 +54,22 @@ public:
     inline int16_t leftAt(uint64_t index) const { return _left[index & kMask]; }
     inline int16_t rightAt(uint64_t index) const { return _right[index & kMask]; }
 
+    /// 对已写入的区间施加线性增益斜坡（缺包静音洞两端的淡出/淡入用）。
+    /// 只能由写端调用，且区间必须落在“已写、未被读走”的范围内。
+    void fadeRange(uint64_t startFrame, int32_t frames, float startGain, float endGain) {
+        if (frames <= 0) {
+            return;
+        }
+
+        const float span = frames > 1 ? static_cast<float>(frames - 1) : 1.0f;
+        for (int32_t i = 0; i < frames; ++i) {
+            const float gain = startGain + ((endGain - startGain) * (static_cast<float>(i) / span));
+            const uint64_t idx = (startFrame + static_cast<uint64_t>(i)) & kMask;
+            _left[idx] = static_cast<int16_t>(static_cast<float>(_left[idx]) * gain);
+            _right[idx] = static_cast<int16_t>(static_cast<float>(_right[idx]) * gain);
+        }
+    }
+
 private:
     int16_t _left[kCapacityFrames];
     int16_t _right[kCapacityFrames];

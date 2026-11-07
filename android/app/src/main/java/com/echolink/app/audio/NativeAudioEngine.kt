@@ -37,6 +37,12 @@ class NativeAudioEngine : AutoCloseable {
 
     fun playBeep() = nativePlayBeep(handle)
 
+    /** 请求重新垫水位（欠载过深时用，比靠比率慢慢抽干快得多）。 */
+    fun requestPrefill() = nativeRequestPrefill(handle)
+
+    /** 把 Oboe 内部缓冲调到 N 个 burst（只在欠载时往上加）。返回实际帧数，<0 表示失败。 */
+    fun setBufferSizeInBursts(bursts: Int): Int = nativeSetBufferSizeInBursts(handle, bursts)
+
     fun resetRing() = nativeResetRing(handle)
 
     /** 读取统计。传入预分配的数组，避免每帧 GC。 */
@@ -82,6 +88,10 @@ class NativeAudioEngine : AutoCloseable {
     private external fun nativeGetResampleRatio(handle: Long): Double
 
     private external fun nativePlayBeep(handle: Long)
+
+    private external fun nativeRequestPrefill(handle: Long)
+
+    private external fun nativeSetBufferSizeInBursts(handle: Long, bursts: Int): Int
 
     private external fun nativeResetRing(handle: Long)
 
@@ -129,6 +139,9 @@ object StatsIndex {
     const val OPEN_ATTEMPTS = 30
     const val EXCLUSIVE_DENIED_CODE = 31
     const val PREFILL_FRAMES = 32
+    const val WATER_MIN_FRAMES = 33
+    const val MAX_CALLBACK_FRAMES = 34
+    const val PREFILL_ACTIVE = 35
     const val COUNT = 40
 }
 
@@ -167,9 +180,15 @@ data class EngineStats(
     val openAttempts: Int,
     val exclusiveDeniedCode: Int,
     val prefillFrames: Long,
+    val waterMinFrames: Long,
+    val maxCallbackFrames: Int,
+    val prefillActive: Boolean,
 ) {
     val waterMs: Double get() = waterFrames * 1000.0 / Protocol.SAMPLE_RATE
     val targetWaterMs: Double get() = targetWaterFrames * 1000.0 / Protocol.SAMPLE_RATE
+
+    /** 区间水位最小值：闭环真正控制的量。 */
+    val waterMinMs: Double get() = waterMinFrames * 1000.0 / Protocol.SAMPLE_RATE
 
     /** Oboe 内部缓冲的实际时长：必须能跨过 PC 端 10 ms 的成批发包间隔。 */
     val bufferMs: Double
@@ -221,6 +240,9 @@ data class EngineStats(
             openAttempts = 0,
             exclusiveDeniedCode = 0,
             prefillFrames = 0,
+            waterMinFrames = 0,
+            maxCallbackFrames = 0,
+            prefillActive = false,
         )
 
         fun from(values: DoubleArray): EngineStats = EngineStats(
@@ -257,6 +279,9 @@ data class EngineStats(
             openAttempts = values[StatsIndex.OPEN_ATTEMPTS].toInt(),
             exclusiveDeniedCode = values[StatsIndex.EXCLUSIVE_DENIED_CODE].toInt(),
             prefillFrames = values[StatsIndex.PREFILL_FRAMES].toLong(),
+            waterMinFrames = values[StatsIndex.WATER_MIN_FRAMES].toLong(),
+            maxCallbackFrames = values[StatsIndex.MAX_CALLBACK_FRAMES].toInt(),
+            prefillActive = values[StatsIndex.PREFILL_ACTIVE].toInt() != 0,
         )
     }
 }

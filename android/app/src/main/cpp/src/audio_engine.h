@@ -45,6 +45,9 @@ enum StatsIndex : int {
     kOpenAttempts = 30,        // 尝试了几次才开流成功
     kExclusiveDeniedCode = 31, // 独占尝试失败时的 Result 码（0 = 没失败过）
     kPrefillFrames = 32,       // 启动垫水位期间输出的静音帧数（不算欠载）
+    kWaterMinFrames = 33,      // 自上次读取以来水位的最小值（闭环控制量）
+    kMaxCallbackFrames = 34,   // 回调收到的最大帧数（用于验证 numFrames <= burst）
+    kPrefillActive = 35,       // 1 = 正在垫水位
     kStatsCount = 40,          // 固定 40：Kotlin 侧 DoubleArray(40)，两侧必须一致
 };
 
@@ -68,6 +71,12 @@ public:
 
     void setResampleRatio(double ratio);
     double resampleRatio() const { return _ratio.load(std::memory_order_relaxed); }
+
+    /// 请求重新垫水位（欠载过深时由控制线程调用，比靠比率慢慢抽干快得多）
+    void requestPrefill() { _prefillPending.store(true, std::memory_order_relaxed); }
+
+    /// 调整 Oboe 内部缓冲为 N 个 burst（LatencyTuner 的简化版，只在欠载时往上加）
+    int32_t setBufferSizeInBursts(int32_t bursts);
 
     void playBeep();
 
@@ -110,6 +119,12 @@ private:
     std::atomic<int64_t> _requestedReadPos{-1};
     std::atomic<double> _baseStep{1.0};
 
+    // 丢帧迟滞状态（只有回调线程读写）
+    bool _dropActive = false;
+
+    // 补静音后需要淡入的帧数（只有写端读写，持 _producerMutex）
+    int32_t _pendingFadeIn = 0;
+
     // 统计（多线程读写，全用 atomic）
     std::atomic<int32_t> _targetWaterFrames{1440};  // 30 ms @48k
     std::atomic<double> _ratio{1.0};
@@ -146,6 +161,8 @@ private:
     std::atomic<int32_t> _openAttempts{0};
     std::atomic<int32_t> _exclusiveDeniedCode{0};
     std::atomic<uint64_t> _prefillFrames{0};
+    std::atomic<int64_t> _waterMinSinceRead{INT64_MAX};
+    std::atomic<int32_t> _maxCallbackFrames{0};
 };
 
 }  // namespace echolink
