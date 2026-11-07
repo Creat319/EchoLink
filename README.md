@@ -16,6 +16,7 @@
 [![Oboe](https://img.shields.io/badge/Oboe-1.9.3-EE6C4D)](android/app/src/main/cpp)
 [![Latency](https://img.shields.io/badge/latency-50–70%20ms%20P99-brightgreen)](#实测数据)
 [![Status](https://img.shields.io/badge/status-真机调优中-yellow)](#验证状态)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
 [![Protocol](https://img.shields.io/badge/wire_format-变长包%20·%201.56%20Mbit%2Fs-blue)](docs/protocol.md)
 
 </div>
@@ -211,6 +212,7 @@ EchoLink/
 | [构建](docs/build.md) | 环境要求、签名、安装、常见问题 |
 | [测试](docs/testing.md) | 延迟测量、浸泡、干扰、设备矩阵的可执行步骤 |
 | [实测记录](docs/verification.md) | 每一条结论背后的真实数字，含失败与修正过程 |
+| [更新记录](CHANGELOG.md) | 各版本变更；0.x 期间次版本号可能含**不兼容的线格式改动**，两端需一起升级 |
 | [评审说明](docs/design-review.md) | 给外部评审的技术说明：当前实现、实测数据、可疑点与待决策问题 |
 
 ## 致谢

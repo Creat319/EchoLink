@@ -13,8 +13,8 @@ android {
         applicationId = "com.echolink.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         // 目标平台：arm64 手机。不打包 32 位与模拟器 ABI。
         ndk {

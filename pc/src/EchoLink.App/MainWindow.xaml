@@ -48,6 +48,12 @@
                         <TextBlock Text="EchoLink" Style="{StaticResource AppTitle}" />
                         <TextBlock Text="· PC 发送端" Style="{StaticResource AppSubtitle}"
                                    Margin="8,0,0,2" VerticalAlignment="Bottom" />
+                        <TextBlock Text="{Binding AppVersionText}"
+                                   Margin="8,0,0,3"
+                                   VerticalAlignment="Bottom"
+                                   FontFamily="Cascadia Mono, Consolas"
+                                   FontSize="10.5"
+                                   Opacity="0.38" />
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,7,0,0">

@@ -81,7 +81,7 @@ object AudioPacketCodec {
 object StatusReport {
     const val SIZE = 40
     const val MAGIC = 0x50524C45
-    const val VERSION = 1
+    const val VERSION = 2   // 2 = 支持变长音频包（收端按数据报长度推导帧数），见 docs/protocol.md §5
     const val TYPE_STATUS = 1
 
     fun build(

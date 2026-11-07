@@ -102,7 +102,8 @@ class ProtocolTest {
 
         val buffer = ByteBuffer.wrap(report).order(ByteOrder.LITTLE_ENDIAN)
         assertEquals(StatusReport.MAGIC, buffer.getInt(0))
-        assertEquals(1, buffer.getShort(4).toInt())
+        // 引用常量而不是写字面量：协议版本升到 2（支持变长包）后这里不该再失败
+        assertEquals(StatusReport.VERSION, buffer.getShort(4).toInt())
         assertEquals(1, buffer.getShort(6).toInt())
         assertEquals(7, buffer.getInt(8))
         assertEquals(480_000L, buffer.getLong(12))

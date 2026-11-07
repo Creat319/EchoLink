@@ -53,7 +53,11 @@ public readonly struct PhoneReport
 {
     public const uint Magic = 0x50524C45; // 'E','L','R','P'
     public const int Size = 40;
-    public const ushort CurrentVersion = 1;
+    /// <summary>本端能理解的最高回报版本。2 = 支持变长音频包。</summary>
+    public const ushort CurrentVersion = 2;
+
+    /// <summary>能正确解析变长音频包的最低手机端版本。</summary>
+    public const ushort MinVariablePacketVersion = 2;
     public const ushort TypeStatus = 1;
 
     public ushort Version { get; init; }

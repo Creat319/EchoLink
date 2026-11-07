@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
@@ -378,6 +379,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _sendErrorsText;
         private set => Set(ref _sendErrorsText, value);
     }
+
+    /// <summary>版本号（来自 Directory.Build.props 的 &lt;Version&gt;），显示在标题右侧便于排查版本不符。</summary>
+    public string AppVersionText { get; } =
+        "v" + (Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion.Split('+')[0]
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
+            ?? "0.0.0");
 
     /// <summary>PC 侧抓取延迟（半个抓取周期）。</summary>
     public string CaptureDelayText

@@ -95,6 +95,7 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     private string _linkDescription = "未启动";
     private PhoneReport? _phoneReport;
     private long _phoneReportTimestamp;
+    private bool _warnedPhoneVersion;
     private IReadOnlyList<TargetCandidate> _candidates = Array.Empty<TargetCandidate>();
 
     public EchoLinkEngine(EchoLinkOptions options)
@@ -629,6 +630,15 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
         var first = _phoneReport is null || SecondsSinceReport() > 1.0;
         _phoneReport = report;
         Interlocked.Exchange(ref _phoneReportTimestamp, Stopwatch.GetTimestamp());
+
+        // 版本不匹配时**声音是完全没有的**（旧 APK 会把变长包全判成畸形丢掉），
+        // 而且从手机端看不出任何异常，所以这里必须大声报出来，否则很难排查。
+        if (report.Version < PhoneReport.MinVariablePacketVersion && !_warnedPhoneVersion)
+        {
+            _warnedPhoneVersion = true;
+            Log($"⚠ 手机端协议版本 {report.Version} 低于 {PhoneReport.MinVariablePacketVersion}：" +
+                "旧版 APK 无法解析变长音频包（会全部丢弃，表现为完全没声音）。请重装新版 APK。");
+        }
 
         if (_linkState is EchoLinkLinkState.Probing or EchoLinkLinkState.StreamingAwaitingReport)
         {
