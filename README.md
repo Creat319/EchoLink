@@ -6,7 +6,7 @@
 
 **把手机当电脑音响。**
 电脑的声音，从手机放出来——USB 网络共享、裸 PCM over UDP、50–70 ms 端到端。
-- [EchoLink](http://el.carovo.shop/) —— 项目文档
+[EchoLink](http://el.carovo.shop/) —— 项目文档
 
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows&logoColor=white)](docs/build.md)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](pc/)
