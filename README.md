@@ -204,4 +204,8 @@ EchoLink/
 - [scrcpy](https://github.com/Genymobile/scrcpy) —— 平滑水位的思路来源
 - Fons Adriaensen，《Controlling adaptive resampling》—— 水位闭环的理论参考
 
+## 许可证
+
+[MIT](LICENSE) © 2026 Creat319
+
 ---
