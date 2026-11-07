@@ -36,6 +36,8 @@ inline int64_t nowNanos() {
     return static_cast<int64_t>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
 }
 
+inline int64_t MonotonicNanos() { return nowNanos(); }
+
 inline int16_t clamp16(float value) {
     if (value > 32767.0f) return 32767;
     if (value < -32768.0f) return -32768;
@@ -343,6 +345,10 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* /*stream*/
     if (numFrames > _maxCallbackFrames.load(std::memory_order_relaxed)) {
         _maxCallbackFrames.store(numFrames, std::memory_order_relaxed);
     }
+
+    // 相邻回调间隔由上面的 _maxCallbackGapNanos 跟踪（kMaxCallbackGapMs）：
+    // **这才是决定 Oboe 缓冲大小的量**——回调迟到时网络线程照常写环，环水位只会涨；
+    // 被抽干的是 Oboe 缓冲（HAL 没数据可读就 xrun），所以缓冲要覆盖住回调间隔的最大值。
 
     // 闭环控制量：回调入口处的水位最小值。
     // PC 端成批投递时水位是锯齿，控制最小值才有物理意义（平均值会高估约半个批次）。

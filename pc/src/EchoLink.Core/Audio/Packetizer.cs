@@ -10,8 +10,13 @@ public interface IPacketSink
 }
 
 /// <summary>
-/// 把连续的 48 kHz 立体声 float 流切成固定 240 帧的裸 PCM 包。
-/// 单包结构：[seq:u32][sampleCount:u64][timestamp:u32][PCM:960B]，见 docs/protocol.md。
+/// 把连续的 48 kHz 立体声 float 流切成裸 PCM 包。
+/// 单包结构：[seq:u32][sampleCount:u64][timestamp:u32][PCM]（长度可变），见 docs/protocol.md。
+///
+/// 包长是**可变的**，最多 <see cref="PacketFormat.FramesPerPacket"/> 帧：
+/// 抓取回调给多少就发多少（S/PDIF 端点是每回调 128 帧 → 每包 2.67 ms）。
+/// 早期版本固定 240 帧，在 2.67 ms 投递粒度下会让播放等到"包内最老的一帧"，
+/// 白白多等 0–5 ms。
 /// </summary>
 public sealed class Packetizer
 {
@@ -38,13 +43,14 @@ public sealed class Packetizer
 
     public long PacketsEmitted { get; private set; }
 
-    /// <summary>推入交错立体声 float 帧，凑满 240 帧就发一个包。</summary>
+    /// <summary>推入交错立体声 float 帧；攒满 <see cref="PacketFormat.FramesPerPacket"/> 就发一个整包。</summary>
     public void Push(ReadOnlySpan<float> stereo, int frames)
     {
         var frame = 0;
         while (frame < frames)
         {
-            var spaceFrames = PacketFormat.FramesPerPacket - (_pendingSamples / PacketFormat.Channels);
+            var pendingFrames = _pendingSamples / PacketFormat.Channels;
+            var spaceFrames = PacketFormat.FramesPerPacket - pendingFrames;
             var take = Math.Min(spaceFrames, frames - frame);
             var sourceOffset = frame * PacketFormat.Channels;
 
@@ -64,26 +70,40 @@ public sealed class Packetizer
 
             if (_pendingSamples == _pending.Length)
             {
-                Emit();
+                Emit(PacketFormat.FramesPerPacket);
             }
         }
     }
 
-    /// <summary>丢弃未凑满的尾包（停止时用，避免发出半包）。</summary>
+    /// <summary>
+    /// 把当前缓冲里不足一包的尾巴立刻发出去（每次抓取回调结束后调用）。
+    /// 这样包长与抓取粒度对齐，而不是固定等 240 帧。
+    /// </summary>
+    public void Flush()
+    {
+        var frames = _pendingSamples / PacketFormat.Channels;
+        if (frames > 0)
+        {
+            Emit(frames);
+        }
+    }
+
+    /// <summary>丢弃未发出的尾包（停止时用）。</summary>
     public void ResetPartial() => _pendingSamples = 0;
 
-    private void Emit()
+    private void Emit(int frames)
     {
         var header = new AudioPacketHeader(NextSequence, NextSampleCount, _timestampProvider(NextSampleCount));
         header.WriteTo(_packet);
 
-        var pcm = _packet.AsSpan(PacketFormat.PayloadOffset, PacketFormat.PayloadBytes);
-        MemoryMarshal.Cast<short, byte>(_pending.AsSpan()).CopyTo(pcm);
+        var payloadBytes = frames * PacketFormat.BytesPerFrame;
+        var pcm = _packet.AsSpan(PacketFormat.PayloadOffset, payloadBytes);
+        MemoryMarshal.Cast<short, byte>(_pending.AsSpan(0, frames * PacketFormat.Channels)).CopyTo(pcm);
 
-        _sink.Send(_packet, NextSequence, NextSampleCount);
+        _sink.Send(_packet.AsSpan(0, PacketFormat.HeaderBytes + payloadBytes), NextSequence, NextSampleCount);
 
         NextSequence++;
-        NextSampleCount += PacketFormat.FramesPerPacket;
+        NextSampleCount += (ulong)frames;
         _pendingSamples = 0;
         PacketsEmitted++;
     }

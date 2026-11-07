@@ -11,11 +11,16 @@ object Protocol {
     const val SAMPLE_RATE = 48000
     const val CHANNELS = 2
     const val BITS_PER_SAMPLE = 16
+    /**
+     * 单包最大帧数。**实际包长是可变的**：PC 端每次抓取回调发一个包，
+     * 板载 2.67 ms 端点上是 128 帧，10 ms 端点上拆成 240 帧的整包。
+     * 接收端必须按数据报长度推导帧数，不能用这个常量当定长。
+     */
     const val FRAMES_PER_PACKET = 240
     const val BYTES_PER_FRAME = CHANNELS * (BITS_PER_SAMPLE / 8)   // 4
-    const val PAYLOAD_BYTES = FRAMES_PER_PACKET * BYTES_PER_FRAME    // 960
+    const val PAYLOAD_BYTES = FRAMES_PER_PACKET * BYTES_PER_FRAME    // 960（单包载荷上限）
     const val HEADER_BYTES = 16
-    const val PACKET_BYTES = HEADER_BYTES + PAYLOAD_BYTES            // 976
+    const val PACKET_BYTES = HEADER_BYTES + PAYLOAD_BYTES            // 976（最大包长）
 
     const val DEFAULT_AUDIO_PORT = 47810
     const val DEFAULT_REPORT_PORT = 47811
@@ -28,6 +33,20 @@ object Protocol {
     fun framesToMs(frames: Long): Double = frames * 1000.0 / SAMPLE_RATE
 
     fun msToFrames(ms: Double): Int = (ms * SAMPLE_RATE / 1000.0).toInt()
+
+    /**
+     * 从数据报长度推导本包帧数（包长可变，跟随 PC 端抓取粒度）。
+     * 返回 -1 表示畸形：载荷不足一帧，或不是整帧。
+     */
+    fun framesInDatagram(datagramBytes: Int): Int {
+        val payload = datagramBytes - HEADER_BYTES
+        if (payload <= 0 || payload % BYTES_PER_FRAME != 0) {
+            return -1
+        }
+
+        val frames = payload / BYTES_PER_FRAME
+        return if (frames > FRAMES_PER_PACKET) -1 else frames
+    }
 }
 
 /** 音频包头（16 B）：[seq:u32][sampleCount:u64][timestamp:u32]。 */
@@ -40,7 +59,7 @@ data class AudioPacketHeader(
 object AudioPacketCodec {
     /** 从 DirectByteBuffer 里按绝对偏移读包头，不改动 position/limit（收包线程无分配）。 */
     fun readHeader(buffer: ByteBuffer): AudioPacketHeader? {
-        if (buffer.capacity() < Protocol.PACKET_BYTES) {
+        if (buffer.capacity() < Protocol.HEADER_BYTES) {
             return null
         }
 

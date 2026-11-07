@@ -50,8 +50,10 @@ class AudioEngineController(
     private var settings = ReceiverSettings()
     private var startedAtMs = 0L
     private var lastUnderrunEvents = 0L
-    private var lastUnderrunActionMs = 0L
+    private var lastUnderrunLogMs = 0L
+    private var underrunPendingCheckMs = 0L
     private var lastPrefillRequestMs = 0L
+    private var lastBufferBumpMs = 0L
     private var bufferBursts = START_BUFFER_BURSTS
     private val waterMinWindow = ArrayDeque<Double>(WATER_WINDOW_TICKS + 1)
     private var lastCallbackCount = -1L
@@ -98,8 +100,10 @@ class AudioEngineController(
             latency.reset()
             paramWarnings.clear()
             lastUnderrunEvents = 0
-            lastUnderrunActionMs = 0
+            lastUnderrunLogMs = 0
+            underrunPendingCheckMs = 0
             lastPrefillRequestMs = 0
+            lastBufferBumpMs = 0
             bufferBursts = START_BUFFER_BURSTS
             waterMinWindow.clear()
             lastCallbackCount = -1
@@ -237,8 +241,23 @@ class AudioEngineController(
         controlWarm = stats.prefillFrames > 0 && !stats.prefillActive
 
         if (underrunDelta > 0) {
-            handleUnderrun(activeEngine, windowMinMs, decision.targetMs, nowMs)
+            // 先只记一笔，等 50 ms 后回来看水位：停顿型欠载（数据晚到但没丢）会自己把环补满，
+            // 立刻重垫水位反而多加一段静音。只有数据真的缺了才重垫。
+            if (underrunPendingCheckMs <= 0) {
+                underrunPendingCheckMs = nowMs
+            }
+            if (nowMs - lastUnderrunLogMs >= UNDERRUN_DEBOUNCE_MS) {
+                lastUnderrunLogMs = nowMs
+                log("欠载（水位最低 ${"%.1f".format(windowMinMs)} ms / 目标 ${"%.1f".format(decision.targetMs)} ms）")
+            }
+        } else if (underrunPendingCheckMs > 0 && nowMs - underrunPendingCheckMs >= UNDERRUN_SETTLE_MS) {
+            underrunPendingCheckMs = 0
+            settleAfterUnderrun(activeEngine, nowMs)
         }
+
+        // Oboe 缓冲该多大，由**相邻回调间隔**决定（不是欠载次数）：
+        // 回调迟到时网络线程照常写环，环水位只会涨；被抽干的是 Oboe 缓冲。
+        maybeGrowBuffer(activeEngine, nowMs);
 
         pushWaterHistory(stats.waterMs)
 
@@ -259,42 +278,49 @@ class AudioEngineController(
     }
 
     /**
-     * 欠载处理（去抖）。
+     * 欠载后 50 ms 的复查。
      *
-     * 原先每 50 ms 就记一次日志、并且靠重采样比率（τ≈5 s）慢慢把水位抬回来，
-     * 结果一次持续故障会刷出几千条日志，而且恢复要十几秒。
-     * 现在改为：1 秒内最多处理一次；水位掉到目标一半以下就直接重走垫水位（几十毫秒静音），
-     * 否则按 burst 递增 Oboe 缓冲（LatencyTuner 式）。
+     * 关键区分：
+     * - 停顿型（数据晚到但没丢）→ 积压会把环自己补满，水位甚至超过目标，交给丢帧迟滞/比率消化，
+     *   此时重垫水位只会**多加一段静音**、白白抬高延迟；
+     * - 真缺失（补过静音后水位仍然很低）→ 才值得重走一次垫水位。
      */
-    private fun handleUnderrun(
-        activeEngine: NativeAudioEngine,
-        windowMinMs: Double,
-        targetMs: Double,
-        nowMs: Long,
-    ) {
-        if (nowMs - lastUnderrunActionMs < UNDERRUN_DEBOUNCE_MS) {
+    private fun settleAfterUnderrun(activeEngine: NativeAudioEngine, nowMs: Long) {
+        val target = targetWaterMs
+        val water = stats.waterMs
+
+        if (water < target * 0.5 && nowMs - lastPrefillRequestMs >= UNDERRUN_DEBOUNCE_MS) {
+            lastPrefillRequestMs = nowMs
+            activeEngine.requestPrefill()
+            log("欠载后水位仍偏低（${"%.1f".format(water)} ms < 目标一半），重新垫水位")
             return
         }
 
-        lastUnderrunActionMs = nowMs
+        if (water > target + 6.0) {
+            log("停顿型欠载：积压已回填到 ${"%.1f".format(water)} ms，靠比率/丢帧消化")
+        }
+    }
 
-        if (windowMinMs < targetMs * 0.5) {
-            if (nowMs - lastPrefillRequestMs >= UNDERRUN_DEBOUNCE_MS) {
-                lastPrefillRequestMs = nowMs
-                activeEngine.requestPrefill()
-                log("欠载且水位低于目标一半（最小 ${"%.1f".format(windowMinMs)} ms），重新垫水位")
-            }
-
+    /** 按观测到的回调间隔决定要不要加大 Oboe 缓冲（比"等欠载发生"更早）。 */
+    private fun maybeGrowBuffer(activeEngine: NativeAudioEngine, nowMs: Long) {
+        val gapMs = stats.maxCallbackGapMs
+        if (gapMs <= 0.0 || bufferBursts >= MAX_BUFFER_BURSTS) {
             return
         }
 
-        if (bufferBursts < MAX_BUFFER_BURSTS) {
-            bufferBursts++
-            val frames = activeEngine.setBufferSizeInBursts(bufferBursts)
-            log("欠载，Oboe 缓冲上调到 $bufferBursts burst（实际 $frames 帧）")
-        } else {
-            log("欠载（水位最小 ${"%.1f".format(windowMinMs)} ms / 目标 ${"%.1f".format(targetMs)} ms），缓冲已达上限")
+        val bufferMs = stats.bufferMs
+        if (bufferMs <= 0.0 || gapMs < bufferMs * BUFFER_GAP_HEADROOM) {
+            return
         }
+
+        if (nowMs - lastBufferBumpMs < BUFFER_BUMP_COOLDOWN_MS) {
+            return
+        }
+
+        lastBufferBumpMs = nowMs
+        bufferBursts++
+        val frames = activeEngine.setBufferSizeInBursts(bufferBursts)
+        log("回调间隔 ${"%.1f".format(gapMs)} ms 逼近缓冲 ${"%.1f".format(bufferMs)} ms，缓冲上调到 $bufferBursts burst（实际 $frames 帧）")
     }
 
     private fun watchdogTick() {
@@ -487,6 +513,15 @@ class AudioEngineController(
 
         /** 欠载处理去抖：1 秒内只处理一次 */
         const val UNDERRUN_DEBOUNCE_MS = 1_000L
+
+        /** 欠载后多久回来看水位（区分"停顿型"与"真缺失"） */
+        const val UNDERRUN_SETTLE_MS = 50L
+
+        /** 回调间隔达到缓冲的多少比例就该加缓冲 */
+        const val BUFFER_GAP_HEADROOM = 0.8
+
+        /** 缓冲上调的最小间隔，避免抖动期频繁调整 */
+        const val BUFFER_BUMP_COOLDOWN_MS = 3_000L
 
         /** Oboe 缓冲起始 burst 数，以及允许上调到的上限 */
         const val START_BUFFER_BURSTS = 2

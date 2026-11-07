@@ -258,6 +258,20 @@ private fun StreamCard(state: ReceiverState) {
             hint = "应 ≤ burst",
         )
         MetricRow(
+            "回调间隔峰值",
+            if (state.engine.maxCallbackGapMs > 0) {
+                String.format(Locale.US, "%.1f ms", state.engine.maxCallbackGapMs)
+            } else {
+                "-"
+            },
+            valueColor = if (state.engine.maxCallbackGapMs > state.engine.bufferMs && state.engine.bufferMs > 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            hint = "决定缓冲够不够",
+        )
+        MetricRow(
             "共享模式",
             state.engine.sharingModeText,
             valueColor = if (state.engine.exclusive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,

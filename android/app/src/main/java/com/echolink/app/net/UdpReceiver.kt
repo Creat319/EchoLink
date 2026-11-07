@@ -58,6 +58,7 @@ class UdpReceiver(
     private var lastTimestampMicros: Int? = null
     private var lastArrivalNanos = 0L
     private var lastSampleCount: Long = -1
+    private var lastFramesInPacket: Long = Protocol.FRAMES_PER_PACKET.toLong()
 
     private var packets = 0L
     private var lost = 0L
@@ -130,7 +131,9 @@ class UdpReceiver(
                 senderAddress = source
             }
 
-            if (length < Protocol.PACKET_BYTES) {
+            // 包长可变（跟随 PC 端抓取粒度）
+            val framesInPacket = Protocol.framesInDatagram(length)
+            if (framesInPacket <= 0) {
                 malformed++
                 publishIfDue(arrivalNanos)
                 continue
@@ -144,14 +147,14 @@ class UdpReceiver(
             }
 
             packets++
-            trackContinuity(header)
+            trackContinuity(header, framesInPacket)
             trackJitter(header, arrivalNanos)
 
             externalFrameConsumer(
                 header.sampleCount,
                 buffer,
                 Protocol.HEADER_BYTES,
-                Protocol.FRAMES_PER_PACKET,
+                framesInPacket,
             )
 
             maybeSendReport(activeChannel, arrivalNanos)
@@ -159,7 +162,7 @@ class UdpReceiver(
         }
     }
 
-    private fun trackContinuity(header: com.echolink.app.audio.AudioPacketHeader) {
+    private fun trackContinuity(header: com.echolink.app.audio.AudioPacketHeader, framesInPacket: Int) {
         val previous = lastSequence
         if (previous != null) {
             val expected = previous + 1
@@ -173,12 +176,14 @@ class UdpReceiver(
         }
 
         if (lastSampleCount >= 0) {
-            val expectedFrames = lastSampleCount + Protocol.FRAMES_PER_PACKET
+            val expectedFrames = lastSampleCount + lastFramesInPacket
             if (expectedFrames != header.sampleCount) {
                 sampleJumps++
                 discontinuityPending = true
             }
         }
+
+        lastFramesInPacket = framesInPacket.toLong()
 
         lastSequence = header.sequence
         lastSampleCount = header.sampleCount

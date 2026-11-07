@@ -671,7 +671,22 @@ internal sealed class LoopbackSink
                 continue;
             }
 
-            var pcm = MemoryMarshal.Cast<byte, short>(data.AsSpan(PacketFormat.PayloadOffset, PacketFormat.PayloadBytes));
+            // 包长可变（跟随抓取粒度）：帧数从数据报长度推导，不能假定 240
+            var payloadBytes = data.Length - PacketFormat.PayloadOffset;
+            if (payloadBytes <= 0 || payloadBytes % PacketFormat.BytesPerFrame != 0)
+            {
+                Malformed++;
+                continue;
+            }
+
+            var framesInPacket = payloadBytes / PacketFormat.BytesPerFrame;
+            if (framesInPacket > PacketFormat.FramesPerPacket)
+            {
+                Malformed++;
+                continue;
+            }
+
+            var pcm = MemoryMarshal.Cast<byte, short>(data.AsSpan(PacketFormat.PayloadOffset, payloadBytes));
             var peak = _peakAbs;
             long nonZero = 0;
             foreach (var sample in pcm)
@@ -711,7 +726,7 @@ internal sealed class LoopbackSink
             }
 
             _lastSequence = header.Sequence;
-            _expectedSampleCount = header.SampleCount + PacketFormat.FramesPerPacket;
+            _expectedSampleCount = header.SampleCount + (ulong)framesInPacket;
 
             // ---- 抖动差分 d_i = Δ到达 − Δ时间戳（手机端用的就是这个量）----
             // 这里同时算两套：真实发送时刻（现在的实现）和名义时间戳（sampleCount 推导，旧实现），

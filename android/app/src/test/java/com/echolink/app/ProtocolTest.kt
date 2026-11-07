@@ -54,9 +54,34 @@ class ProtocolTest {
     }
 
     @Test
-    fun headerRejectsShortPacket() {
-        val short = ByteBuffer.allocate(Protocol.PACKET_BYTES - 1)
-        assertNull(AudioPacketCodec.readHeader(short))
+    fun headerRejectsBufferSmallerThanHeader() {
+        // 契约变更：包长可变后，readHeader 只要求容纳 16 B 包头，
+        // “载荷是否是整帧”由 Protocol.framesInDatagram 负责校验。
+        val tooShort = ByteBuffer.allocate(Protocol.HEADER_BYTES - 1)
+        assertNull(AudioPacketCodec.readHeader(tooShort))
+    }
+
+    @Test
+    fun headerAcceptsSmallVariableLengthPacket() {
+        // 板载 2.67 ms 端点：每包 128 帧 = 528 B，必须能读出包头
+        val small = ByteBuffer.allocate(Protocol.HEADER_BYTES + 128 * Protocol.BYTES_PER_FRAME)
+        small.order(ByteOrder.LITTLE_ENDIAN)
+        small.putInt(0, 7)
+        small.putLong(4, 384L)
+        small.putInt(12, 12_345)
+
+        val header = AudioPacketCodec.readHeader(small)
+        assertNotNull(header)
+        assertEquals(7, header!!.sequence)
+        assertEquals(384L, header.sampleCount)
+        assertEquals(12_345, header.timestampMicros)
+        assertEquals(128, Protocol.framesInDatagram(small.capacity()))
+    }
+
+    @Test
+    fun nonWholeFrameDatagramIsRejected() {
+        // 976 - 1 字节：载荷不是整帧，不能当成合法的 243 帧包
+        assertEquals(-1, Protocol.framesInDatagram(Protocol.PACKET_BYTES - 1))
     }
 
     @Test

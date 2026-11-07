@@ -31,7 +31,8 @@ public readonly struct AudioPacketHeader
 
     public static bool TryRead(ReadOnlySpan<byte> packet, out AudioPacketHeader header)
     {
-        if (packet.Length < PacketFormat.PacketBytes)
+        // 包长可变（跟随抓取粒度），只要求至少容纳包头
+        if (packet.Length < PacketFormat.HeaderBytes)
         {
             header = default;
             return false;

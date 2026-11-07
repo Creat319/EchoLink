@@ -39,6 +39,8 @@ public sealed class EchoLinkSnapshot
     public long FramesCaptured { get; init; }
     public double CapturedSeconds { get; init; }
     public long PacketsSent { get; init; }
+    public double MaxSendIntervalMs { get; init; }
+    public long SendStalls { get; init; }
     public double PacketsPerSecond { get; init; }
     public long SendErrors { get; init; }
     public long SilentCallbacks { get; init; }
@@ -60,6 +62,9 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
 {
     private readonly EchoLinkOptions _options;
     private readonly Stopwatch _clock = new();
+    private double _lastSendMs;
+    private double _maxSendIntervalMs;
+    private long _sendStalls;
     private readonly List<string> _log = new();
     private readonly object _logLock = new();
 
@@ -290,6 +295,8 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             FramesCaptured = Interlocked.Read(ref _framesCaptured),
             CapturedSeconds = Interlocked.Read(ref _framesCaptured) / (double)PacketFormat.SampleRate,
             PacketsSent = transport?.PacketsSent ?? 0,
+            MaxSendIntervalMs = _maxSendIntervalMs,
+            SendStalls = Interlocked.Read(ref _sendStalls),
             PacketsPerSecond = _packetsPerSecond,
             SendErrors = transport?.SendErrors ?? 0,
             SilentCallbacks = Interlocked.Read(ref _silentCallbacks),
@@ -367,6 +374,11 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             }
 
             _packetizer.Push(_resampledScratch, resampled);
+            // 每次抓取回调结束就把尾巴发出去：包长跟着抓取粒度走（S/PDIF 上 128 帧 ≈ 2.67 ms），
+            // 而不是固定攒满 240 帧再发——后者在 2.67 ms 粒度下会多等 0–5 ms。
+            _packetizer.Flush();
+
+            TrackSendInterval();
         }
         catch (Exception ex)
         {
@@ -376,6 +388,34 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     }
 
     void ILoopbackSink.OnLoopbackLog(string message) => Log(message);
+
+    /// <summary>
+    /// 记录相邻两次抓取回调（≈相邻两个发包时刻）的间隔。
+    /// 用途：把"停顿发生在发送之前还是之后"分开——真实的发送间隔放大说明 PC 侧卡了，
+    /// 而手机端 |Δ到达 − Δ时间戳| 变大说明延迟在 sendto 之后。
+    /// </summary>
+    private void TrackSendInterval()
+    {
+        var now = _clock.Elapsed.TotalMilliseconds;
+        var previous = _lastSendMs;
+        _lastSendMs = now;
+
+        if (previous <= 0)
+        {
+            return;
+        }
+
+        var interval = now - previous;
+        if (interval > _maxSendIntervalMs)
+        {
+            _maxSendIntervalMs = interval;
+        }
+
+        if (interval > 50)
+        {
+            Interlocked.Increment(ref _sendStalls);
+        }
+    }
 
     private void EnsureScratch(int frames)
     {
