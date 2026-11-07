@@ -1,6 +1,7 @@
 #include "audio_engine.h"
 
 #include <android/log.h>
+#include <sys/system_properties.h>
 
 #include <algorithm>
 #include <cmath>
@@ -307,12 +308,34 @@ int32_t AudioEngine::openStreamLocked(bool exclusive) {
     _started.store(1);
     _streamGeneration.fetch_add(1);
 
+    // ---- MMAP 能力探测 ----
+    // 判断"低延迟还有没有别的路"只需要这三项，不需要再盲试 Usage 组合：
+    //  - 两项系统属性都为 false → 设备不提供，应用侧无解
+    //  - MMAP 可用但独占被拒 → 共享流应当也走 MMAP（这就是"MMAP shared"）
+    //  - 都可用但本次 isMMapUsed 为 false → 看 logcat 里的 "FAST denied"
+    const bool mmapSupported = oboe::OboeExtensions::isMMapSupported();
+    const bool mmapEnabled = oboe::OboeExtensions::isMMapEnabled();
+    const bool mmapUsed = oboe::OboeExtensions::isMMapUsed(_stream.get());
+    _mmapSupported.store(mmapSupported ? 1 : 0);
+    _mmapEnabled.store(mmapEnabled ? 1 : 0);
+    _mmapUsed.store(mmapUsed ? 1 : 0);
+
+    char policy[PROP_VALUE_MAX] = {0};
+    char exclusivePolicy[PROP_VALUE_MAX] = {0};
+    __system_property_get("aaudio.mmap_policy", policy);
+    __system_property_get("aaudio.mmap_exclusive_policy", exclusivePolicy);
+
     LOGI("stream up: %s | sharing=%s | %d Hz %d ch | burst=%d cap=%d size=%d (%.1f ms) | setBuffer=%s",
          usedLabel,
          sharing == oboe::SharingMode::Exclusive ? "exclusive" : "shared",
          actualRate, actualChannels, burst, capacity, bufferSize,
          rateForMs > 0 ? bufferSize * 1000.0f / static_cast<float>(rateForMs) : 0.0f,
          oboe::convertToText(setBufferStatus));
+
+    // aaudio.mmap_policy: 1=never 2=auto 3=always；mmap_exclusive_policy 同义
+    LOGI("mmap: supported=%d enabled=%d used=%d | props[policy=%s exclusive=%s]",
+         mmapSupported ? 1 : 0, mmapEnabled ? 1 : 0, mmapUsed ? 1 : 0,
+         policy[0] ? policy : "?", exclusivePolicy[0] ? exclusivePolicy : "?");
     return 0;
 }
 
@@ -691,6 +714,9 @@ void AudioEngine::fillStats(double* out, int32_t length) {
     out[kPrefillActive] = _prefillPending.load(std::memory_order_relaxed) ? 1.0 : 0.0;
     const int64_t schedGap = _schedGapMaxNs.exchange(0, std::memory_order_relaxed);
     out[kSchedGapMaxMs] = static_cast<double>(schedGap) / 1'000'000.0;
+    out[kMMapSupported] = _mmapSupported.load(std::memory_order_relaxed);
+    out[kMMapEnabled] = _mmapEnabled.load(std::memory_order_relaxed);
+    out[kMMapUsed] = _mmapUsed.load(std::memory_order_relaxed);
 }
 
 }  // namespace echolink

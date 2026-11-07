@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include <oboe/Oboe.h>
+#include <oboe/OboeExtensions.h>
 
 #include "ring_buffer.h"
 
@@ -49,6 +50,9 @@ enum StatsIndex : int {
     kMaxCallbackFrames = 34,   // 回调收到的最大帧数（用于验证 numFrames <= burst）
     kPrefillActive = 35,       // 1 = 正在垫水位
     kSchedGapMaxMs = 36,       // 区间内"调度型"回调间隔峰值（已剔除开流停顿，读后重置）
+    kMMapSupported = 37,       // 1 = 设备支持 MMAP（isMMapSupported）
+    kMMapEnabled = 38,         // 1 = 本应用允许走 MMAP（isMMapEnabled）
+    kMMapUsed = 39,            // 1 = 实际打开的流走了 MMAP（isMMapUsed）
     kStatsCount = 40,          // 固定 40：Kotlin 侧 DoubleArray(40)，两侧必须一致
 };
 
@@ -166,6 +170,11 @@ private:
     std::atomic<int32_t> _maxCallbackFrames{0};
     std::atomic<int64_t> _schedGapMaxNs{0};   // 读后重置；剔除开流停顿与 >100 ms 的流级空档
     int64_t _firstCallbackNanos = 0;          // 仅回调线程读写（用于跳过开流阶段）
+
+    // MMAP 能力探测：这三项决定"低延迟还有没有别的路可走"，见 docs/design-review.md §5.1
+    std::atomic<int32_t> _mmapSupported{0};
+    std::atomic<int32_t> _mmapEnabled{0};
+    std::atomic<int32_t> _mmapUsed{0};
 };
 
 }  // namespace echolink

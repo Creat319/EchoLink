@@ -253,6 +253,20 @@ private fun StreamCard(state: ReceiverState) {
             hint = "${state.bufferBursts} burst",
         )
         MetricRow(
+            "MMAP",
+            when {
+                state.engine.mmapUsed -> "正在使用"
+                state.engine.mmapSupported -> "支持但未使用"
+                else -> "设备不支持"
+            },
+            valueColor = if (state.engine.mmapUsed) {
+                MaterialTheme.colorScheme.secondary
+            } else {
+                MaterialTheme.colorScheme.tertiary
+            },
+            hint = "绕开混音层的关键",
+        )
+        MetricRow(
             "回调帧数上限",
             if (state.engine.maxCallbackFrames > 0) "${state.engine.maxCallbackFrames} 帧" else "-",
             hint = "应 ≤ burst",

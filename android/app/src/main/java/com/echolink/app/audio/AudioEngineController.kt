@@ -54,6 +54,8 @@ class AudioEngineController(
     private var underrunPendingCheckMs = 0L
     private var lastPrefillRequestMs = 0L
     private var lastBufferBumpMs = 0L
+    private var traceWriter: java.io.BufferedWriter? = null
+    private var lastTraceMs = 0L
     private var bufferBursts = START_BUFFER_BURSTS
     private val waterMinWindow = ArrayDeque<Double>(WATER_WINDOW_TICKS + 1)
     private var lastCallbackCount = -1L
@@ -105,6 +107,7 @@ class AudioEngineController(
             lastPrefillRequestMs = 0
             lastBufferBumpMs = 0
             bufferBursts = START_BUFFER_BURSTS
+            openTrace()
             waterMinWindow.clear()
             lastCallbackCount = -1
             firstPacketSeen = false
@@ -152,6 +155,7 @@ class AudioEngineController(
         watchdogJob?.cancel()
         controlJob = null
         watchdogJob = null
+        closeTrace()
 
         scope.launch {
             receiver?.close()
@@ -228,6 +232,7 @@ class AudioEngineController(
             underrunDelta = underrunDelta,
             framesPerBurst = stats.framesPerBurst,
             bufferMs = stats.bufferMs,
+            nowMs = nowMs,
             fixedTargetMs = fixedTarget,
         )
 
@@ -260,6 +265,7 @@ class AudioEngineController(
         maybeGrowBuffer(activeEngine, nowMs);
 
         pushWaterHistory(stats.waterMs)
+        writeTraceRow(nowMs, windowMinMs, decision.targetMs)
 
         // 20 Hz 采样、10 Hz 发布，避免 Compose 过度重组
         tick++
@@ -483,6 +489,80 @@ class AudioEngineController(
         )
     }
 
+    /**
+     * 收敛判据靠趋势，不靠"有没有断音"。每 10 秒往 CSV 写一行，
+     * 长测结束后直接看曲线：水位最小值斜率、比率是否单向漂移、缓冲是否被抬起。
+     *
+     * 字段：秒、最小水位、均值水位、比率、目标、Oboe burst、欠载累计、输出延迟、调度间隔峰值
+     */
+    private fun openTrace() {
+        closeTrace()
+        try {
+            val dir = java.io.File(context.filesDir, "logs")
+            if (!dir.exists() && !dir.mkdirs()) {
+                log("轨迹日志目录创建失败，跳过记录")
+                return
+            }
+
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+                .format(java.util.Date())
+            val file = java.io.File(dir, "trace-$stamp.csv")
+            traceWriter = file.bufferedWriter()
+            traceWriter?.let {
+                it.write("elapsedSec,waterMinMs,waterAvgMs,ratio,targetMs,bufferBursts,underruns,outputLatencyMs,schedGapMaxMs")
+                it.newLine()
+                it.flush()
+                log("轨迹日志：${file.absolutePath}")
+            }
+        } catch (t: Throwable) {
+            log("轨迹日志开启失败：${t.message}")
+            traceWriter = null
+        }
+    }
+
+    private fun closeTrace() {
+        try {
+            traceWriter?.flush()
+            traceWriter?.close()
+        } catch (_: Throwable) {
+            // 关闭失败不影响收流
+        }
+
+        traceWriter = null
+    }
+
+    private fun writeTraceRow(nowMs: Long, waterMinMs: Double, targetMs: Double) {
+        val writer = traceWriter ?: return
+        if (nowMs - lastTraceMs < TRACE_INTERVAL_MS) {
+            return
+        }
+
+        lastTraceMs = nowMs
+        try {
+            val elapsedSec = (nowMs - startedAtMs) / 1000.0
+            writer.write(
+                String.format(
+                    java.util.Locale.US,
+                    "%.1f,%.2f,%.2f,%.6f,%.2f,%d,%d,%.1f,%.1f",
+                    elapsedSec,
+                    waterMinMs,
+                    stats.waterMs,
+                    stats.ratio,
+                    targetMs,
+                    bufferBursts,
+                    stats.underrunEvents,
+                    stats.latencyMs,
+                    stats.schedGapMaxMs,
+                ),
+            )
+            writer.newLine()
+            writer.flush()
+        } catch (t: Throwable) {
+            log("轨迹日志写入失败：${t.message}")
+            closeTrace()
+        }
+    }
+
     private fun log(message: String) {
         val line = "%s  %s".format(
             java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date()),
@@ -524,6 +604,9 @@ class AudioEngineController(
 
         /** 缓冲上调的最小间隔，避免抖动期频繁调整 */
         const val BUFFER_BUMP_COOLDOWN_MS = 3_000L
+
+        /** 轨迹日志写入间隔 */
+        const val TRACE_INTERVAL_MS = 10_000L
 
         /** Oboe 缓冲起始 burst 数，以及允许上调到的上限 */
         const val START_BUFFER_BURSTS = 2

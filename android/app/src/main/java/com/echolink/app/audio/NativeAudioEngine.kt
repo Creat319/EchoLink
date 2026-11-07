@@ -143,6 +143,9 @@ object StatsIndex {
     const val MAX_CALLBACK_FRAMES = 34
     const val PREFILL_ACTIVE = 35
     const val SCHED_GAP_MAX_MS = 36
+    const val MMAP_SUPPORTED = 37
+    const val MMAP_ENABLED = 38
+    const val MMAP_USED = 39
     const val COUNT = 40
 }
 
@@ -186,6 +189,12 @@ data class EngineStats(
     val prefillActive: Boolean,
     /** 区间内"调度型"回调间隔峰值（已剔除开流停顿与 >100 ms 的流级空档），决定 Oboe 缓冲够不够。 */
     val schedGapMaxMs: Double,
+    /** 设备是否支持 MMAP（来自 OboeExtensions::isMMapSupported）。 */
+    val mmapSupported: Boolean,
+    /** 本应用是否允许走 MMAP。 */
+    val mmapEnabled: Boolean,
+    /** 本次打开的流**实际**是否走了 MMAP。false 说明落到了普通混音器。 */
+    val mmapUsed: Boolean,
 ) {
     val waterMs: Double get() = waterFrames * 1000.0 / Protocol.SAMPLE_RATE
     val targetWaterMs: Double get() = targetWaterFrames * 1000.0 / Protocol.SAMPLE_RATE
@@ -247,6 +256,9 @@ data class EngineStats(
             maxCallbackFrames = 0,
             prefillActive = false,
             schedGapMaxMs = 0.0,
+            mmapSupported = false,
+            mmapEnabled = false,
+            mmapUsed = false,
         )
 
         fun from(values: DoubleArray): EngineStats = EngineStats(
@@ -287,6 +299,9 @@ data class EngineStats(
             maxCallbackFrames = values[StatsIndex.MAX_CALLBACK_FRAMES].toInt(),
             prefillActive = values[StatsIndex.PREFILL_ACTIVE].toInt() != 0,
             schedGapMaxMs = values[StatsIndex.SCHED_GAP_MAX_MS],
+            mmapSupported = values[StatsIndex.MMAP_SUPPORTED].toInt() != 0,
+            mmapEnabled = values[StatsIndex.MMAP_ENABLED].toInt() != 0,
+            mmapUsed = values[StatsIndex.MMAP_USED].toInt() != 0,
         )
     }
 }
