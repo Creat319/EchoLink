@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>EchoLink.App</RootNamespace>
+    <AssemblyName>EchoLink.App</AssemblyName>
+
+    <!-- 由 scripts/gen-icon.ps1 生成（与 assets/icon.svg 同源） -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
+
+    <!-- WPF 里不需要 ApplicationConfiguration.Initialize()，入口由 App.xaml 负责 -->
+    <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Material Design in XAML -->
+    <PackageReference Include="MaterialDesignThemes" Version="5.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 标题栏用的应用图标（与 exe 图标同源） -->
+    <Resource Include="Assets\logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NAudio 由 Core 的 PackageReference 传递过来，此处不再重复声明 -->
+    <ProjectReference Include="..\..\src\EchoLink.Core\EchoLink.Core.csproj" />
+  </ItemGroup>
+
+</Project>

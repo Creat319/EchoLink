@@ -1,0 +1,96 @@
+<Application x:Class="EchoLink.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:EchoLink.App.Converters"
+             StartupUri="MainWindow.xaml">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 深色主题 + 青色主色，与手机端 Compose 界面同色系 -->
+                <materialDesign:BundledTheme BaseTheme="Dark" PrimaryColor="Cyan" SecondaryColor="Teal" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <conv:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
+            <conv:FractionWidthConverter x:Key="FractionWidth" />
+
+            <!-- ================= 品牌色（与手机端 Compose 主题一致） ================= -->
+            <SolidColorBrush x:Key="BrandCyan" Color="#64D2FF" />
+            <SolidColorBrush x:Key="BrandGreen" Color="#7EE2B8" />
+            <SolidColorBrush x:Key="BrandAmber" Color="#FFC46B" />
+
+            <!-- 不用 MaterialDesignPaper/CardBackground：默认是中性灰，和手机端深海军蓝不统一 -->
+            <SolidColorBrush x:Key="AppBackground" Color="#0A0E13" />
+            <SolidColorBrush x:Key="AppCardBackground" Color="#111822" />
+            <SolidColorBrush x:Key="AppCardBorder" Color="#1E2A38" />
+            <SolidColorBrush x:Key="AppInset" Color="#0C121A" />
+            <SolidColorBrush x:Key="AppBody" Color="#E4EBF2" />
+
+            <!-- ================= 排版 ================= -->
+            <Style x:Key="AppTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="19" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="Foreground" Value="{StaticResource AppBody}" />
+            </Style>
+
+            <Style x:Key="AppSubtitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Opacity" Value="0.62" />
+                <Setter Property="Foreground" Value="{StaticResource AppBody}" />
+            </Style>
+
+            <Style x:Key="SectionTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Margin" Value="0,0,0,10" />
+                <Setter Property="Foreground" Value="{StaticResource BrandCyan}" />
+            </Style>
+
+            <Style x:Key="FieldLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Opacity" Value="0.65" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <!-- 等宽数字：数值跳动时不会左右抖 -->
+            <Style x:Key="MonoValue" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+
+            <!-- ================= 卡片 ================= -->
+            <!-- 用 Border 而不是 materialDesign:Card：圆角/描边/内边距完全可控，
+                 也不依赖 MaterialDesignThemes 各版本间变化的 Card 属性 -->
+            <Style x:Key="CardPanel" TargetType="Border">
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="Background" Value="{StaticResource AppCardBackground}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AppCardBorder}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="14" />
+                <Setter Property="Margin" Value="0,0,0,9" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+            </Style>
+
+            <Style x:Key="CardPanelTight" TargetType="Border" BasedOn="{StaticResource CardPanel}">
+                <Setter Property="Padding" Value="12,10" />
+                <Setter Property="Margin" Value="0,0,0,10" />
+            </Style>
+
+            <!-- 卡片内部的凹陷区域（候选地址、电平条底槽） -->
+            <Style x:Key="InsetPanel" TargetType="Border">
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Background" Value="{StaticResource AppInset}" />
+                <Setter Property="Padding" Value="12,10" />
+            </Style>
+
+            <!-- ================= 间距 ================= -->
+            <Style x:Key="FieldSpacing" TargetType="Control">
+                <Setter Property="Margin" Value="0,0,0,10" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

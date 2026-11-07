@@ -1,0 +1,22 @@
+<UserControl x:Class="EchoLink.App.Controls.LevelMeter"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root"
+             Height="9">
+
+    <Border x:Name="Track"
+            CornerRadius="4.5"
+            Background="#33000000"
+            ClipToBounds="True">
+        <Border HorizontalAlignment="Left"
+                CornerRadius="4.5"
+                Background="{Binding Fill, ElementName=Root}">
+            <Border.Width>
+                <MultiBinding Converter="{StaticResource FractionWidth}">
+                    <Binding Path="Value" ElementName="Root" />
+                    <Binding Path="ActualWidth" ElementName="Track" />
+                </MultiBinding>
+            </Border.Width>
+        </Border>
+    </Border>
+</UserControl>

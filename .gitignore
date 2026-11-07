@@ -1,0 +1,28 @@
+# 构建产物
+bin/
+obj/
+artifacts/
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/.idea/
+.kotlin/
+*.iml
+
+# 诊断输出
+*.wav
+*.log
+
+# 与本仓库无关的本地素材（宣传片 Remotion 工程等，500+ MB，含 node_modules）
+xcp/
+
+# 编辑器 / 系统
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

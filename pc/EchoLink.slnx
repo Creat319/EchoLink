@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EchoLink.App/EchoLink.App.csproj" />
+    <Project Path="src/EchoLink.Core/EchoLink.Core.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/EchoLink.Diagnostics/EchoLink.Diagnostics.csproj" />
+  </Folder>
+</Solution>

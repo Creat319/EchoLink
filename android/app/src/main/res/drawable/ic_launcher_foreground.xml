@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- EchoLink 启动图标前景层（自适应图标 108x108dp，内容保持在中心 72dp 安全区内）
+     图形与 assets/icon.svg 同源：白色手机 + 三道青色声波 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 手机机身 -->
+    <path
+        android:fillColor="#E9F5FF"
+        android:pathData="M45,30 L67,30 A5,5 0 0 1 72,35 L72,73 A5,5 0 0 1 67,78 L45,78 A5,5 0 0 1 40,73 L40,35 A5,5 0 0 1 45,30 Z" />
+
+    <!-- 听筒缝 -->
+    <path
+        android:fillColor="#A8BDD1"
+        android:pathData="M47.4,33.4 L55.4,33.4 A0.8,0.8 0 0 1 56.2,34.2 L56.2,34.2 A0.8,0.8 0 0 1 55.4,35 L47.4,35 A0.8,0.8 0 0 1 46.6,34.2 A0.8,0.8 0 0 1 47.4,33.4 Z" />
+
+    <!-- 底部横条 -->
+    <path
+        android:fillColor="#A8BDD1"
+        android:pathData="M50.2,73.6 L61.8,73.6 A0.7,0.7 0 0 1 62.5,74.3 A0.7,0.7 0 0 1 61.8,75 L50.2,75 A0.7,0.7 0 0 1 49.5,74.3 A0.7,0.7 0 0 1 50.2,73.6 Z" />
+
+    <!-- 三道同心声波 -->
+    <path
+        android:strokeColor="#FF64D2FF"
+        android:strokeWidth="4.2"
+        android:strokeLineCap="round"
+        android:pathData="M67.5,46.9 A9,9 0 0 1 67.5,61.1" />
+    <path
+        android:strokeColor="#C764D2FF"
+        android:strokeWidth="4.2"
+        android:strokeLineCap="round"
+        android:pathData="M71.2,42.2 A15,15 0 0 1 71.2,65.8" />
+    <path
+        android:strokeColor="#8C64D2FF"
+        android:strokeWidth="4.2"
+        android:strokeLineCap="round"
+        android:pathData="M74.9,37.5 A21,21 0 0 1 74.9,70.5" />
+</vector>

@@ -1,0 +1,24 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="EchoLink">
+  <title>EchoLink</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101B2E" />
+      <stop offset="1" stop-color="#070C16" />
+    </linearGradient>
+  </defs>
+
+  <!-- 搴曪細娣辫壊鍦嗚 -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)" />
+
+  <!-- 鎵嬫満 -->
+  <rect x="248" y="296" width="236" height="432" rx="54" fill="#E9F5FF" />
+  <rect x="336" y="330" width="60" height="14" rx="7" fill="#A8BDD1" />
+  <rect x="330" y="684" width="72" height="10" rx="5" fill="#A8BDD1" />
+
+  <!-- 澹版尝锛氫互鎵嬫満鍙崇紭涓哄渾蹇冿紝涓夐亾鍚屽績鍦嗗姬 -->
+  <g fill="none" stroke="#64D2FF" stroke-width="44" stroke-linecap="round">
+    <path d="M 580 512 A 96 96 0 0 1 580 512"  opacity="1" />
+    <path d="M 644 512 A 160 160 0 0 1 644 512"  opacity="0.78" />
+    <path d="M 708 512 A 224 224 0 0 1 708 512"  opacity="0.55" />
+  </g>
+</svg>
