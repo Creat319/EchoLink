@@ -206,6 +206,15 @@ EchoLink/
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 Creat319
+[GPL-3.0](LICENSE) © 2026 Creat319
+
+本项目以 GNU General Public License v3.0 发布。你可以自由使用、修改、分发，
+但如果分发修改后的版本，必须同样以 GPL-3.0 开源并附带源码。
+
+> 为什么是 v3 而不是 v2：本项目的依赖里有 Apache-2.0 组件
+> （Oboe、Jetpack Compose、MaterialDesignThemes 等），
+> Apache-2.0 与 GPLv2 不兼容，与 GPLv3 兼容。
 
 ---
+
+<div align="center"><sub>图标与界面均由代码生成 · <code>scripts/gen-icon.ps1</code></sub></div>
