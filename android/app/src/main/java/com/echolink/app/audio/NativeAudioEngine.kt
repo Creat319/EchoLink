@@ -142,6 +142,7 @@ object StatsIndex {
     const val WATER_MIN_FRAMES = 33
     const val MAX_CALLBACK_FRAMES = 34
     const val PREFILL_ACTIVE = 35
+    const val SCHED_GAP_MAX_MS = 36
     const val COUNT = 40
 }
 
@@ -183,6 +184,8 @@ data class EngineStats(
     val waterMinFrames: Long,
     val maxCallbackFrames: Int,
     val prefillActive: Boolean,
+    /** 区间内"调度型"回调间隔峰值（已剔除开流停顿与 >100 ms 的流级空档），决定 Oboe 缓冲够不够。 */
+    val schedGapMaxMs: Double,
 ) {
     val waterMs: Double get() = waterFrames * 1000.0 / Protocol.SAMPLE_RATE
     val targetWaterMs: Double get() = targetWaterFrames * 1000.0 / Protocol.SAMPLE_RATE
@@ -243,6 +246,7 @@ data class EngineStats(
             waterMinFrames = 0,
             maxCallbackFrames = 0,
             prefillActive = false,
+            schedGapMaxMs = 0.0,
         )
 
         fun from(values: DoubleArray): EngineStats = EngineStats(
@@ -282,6 +286,7 @@ data class EngineStats(
             waterMinFrames = values[StatsIndex.WATER_MIN_FRAMES].toLong(),
             maxCallbackFrames = values[StatsIndex.MAX_CALLBACK_FRAMES].toInt(),
             prefillActive = values[StatsIndex.PREFILL_ACTIVE].toInt() != 0,
+            schedGapMaxMs = values[StatsIndex.SCHED_GAP_MAX_MS],
         )
     }
 }

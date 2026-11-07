@@ -234,7 +234,7 @@
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2">
-                                    <controls:MetricRow Label="名义延迟" Value="{Binding NominalLatencyText}" Hint="引擎周期 + 缓冲" />
+                                    <controls:MetricRow Label="PC 抓取" Value="{Binding CaptureDelayText}" Hint="半个抓取周期" />
                                     <controls:MetricRow Label="峰值电平" Value="{Binding PeakText}" />
                                     <controls:MetricRow Label="RMS" Value="{Binding RmsText}" />
                                     <controls:MetricRow Label="手机回报距今" Value="{Binding PhoneAgeText}" />
@@ -276,6 +276,38 @@
                                     <controls:MetricRow Label="输出延迟" Value="{Binding PhoneLatencyText}" />
                                 </StackPanel>
                             </Grid>
+
+                            <!-- 端到端：把三段加起来的估算值，放在最显眼的位置 -->
+                            <Border Style="{StaticResource InsetPanel}"
+                                    Margin="0,8,0,0"
+                                    Padding="12,8"
+                                    Visibility="{Binding HasPhoneReport, Converter={StaticResource BoolToVisibility}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="端到端（估）" FontSize="12.5" Opacity="0.72" />
+                                        <TextBlock Text="平均" Margin="6,0,0,0" FontSize="10.5" Opacity="0.42"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding EndToEndText}"
+                                                   Foreground="{StaticResource BrandGreen}"
+                                                   FontFamily="Cascadia Mono, Consolas"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock Text="{Binding EndToEndBreakdown}"
+                                                   FontSize="10.5"
+                                                   Opacity="0.42"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
 
                             <TextBlock Text="尚未收到手机回报 —— 请确认手机端已点「开始接收」，或地址/端口是否正确。"
                                        Style="{StaticResource AppSubtitle}"

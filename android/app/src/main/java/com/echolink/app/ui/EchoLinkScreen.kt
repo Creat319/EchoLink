@@ -259,17 +259,17 @@ private fun StreamCard(state: ReceiverState) {
         )
         MetricRow(
             "回调间隔峰值",
-            if (state.engine.maxCallbackGapMs > 0) {
-                String.format(Locale.US, "%.1f ms", state.engine.maxCallbackGapMs)
+            if (state.engine.schedGapMaxMs > 0) {
+                String.format(Locale.US, "%.1f ms", state.engine.schedGapMaxMs)
             } else {
                 "-"
             },
-            valueColor = if (state.engine.maxCallbackGapMs > state.engine.bufferMs && state.engine.bufferMs > 0) {
+            valueColor = if (state.engine.schedGapMaxMs > state.engine.bufferMs && state.engine.bufferMs > 0) {
                 MaterialTheme.colorScheme.error
             } else {
                 MaterialTheme.colorScheme.onSurface
             },
-            hint = "决定缓冲够不够",
+            hint = "剔除开流停顿",
         )
         MetricRow(
             "共享模式",

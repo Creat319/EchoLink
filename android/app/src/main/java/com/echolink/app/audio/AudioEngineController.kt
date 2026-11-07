@@ -303,7 +303,9 @@ class AudioEngineController(
 
     /** 按观测到的回调间隔决定要不要加大 Oboe 缓冲（比"等欠载发生"更早）。 */
     private fun maybeGrowBuffer(activeEngine: NativeAudioEngine, nowMs: Long) {
-        val gapMs = stats.maxCallbackGapMs
+        // 用"调度型"间隔（原生已剔除开流 1 秒内的空档与 >100 ms 的流级停顿），
+        // 否则流启动时那个 200 ms 的正常空档会把缓冲一路顶到上限、再也降不回来。
+        val gapMs = stats.schedGapMaxMs
         if (gapMs <= 0.0 || bufferBursts >= MAX_BUFFER_BURSTS) {
             return
         }

@@ -74,7 +74,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _silentCallbacksText = "0";
     private string _discontinuitiesText = "0";
     private string _sendErrorsText = "0";
-    private string _nominalLatencyText = "-";
+    private string _captureDelayText = "-";
+    private string _endToEndText = "-";
+    private string _endToEndBreakdown = "等待手机回报";
     private string _wavDumpStatusText = "未写入";
     private bool _hasPhoneReport;
     private string _phoneWaterText = "-";
@@ -377,10 +379,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _sendErrorsText, value);
     }
 
-    public string NominalLatencyText
+    /// <summary>PC 侧抓取延迟（半个抓取周期）。</summary>
+    public string CaptureDelayText
     {
-        get => _nominalLatencyText;
-        private set => Set(ref _nominalLatencyText, value);
+        get => _captureDelayText;
+        private set => Set(ref _captureDelayText, value);
+    }
+
+    /// <summary>端到端平均延迟估算值。</summary>
+    public string EndToEndText
+    {
+        get => _endToEndText;
+        private set => Set(ref _endToEndText, value);
+    }
+
+    /// <summary>估算值的三段拆解，避免数字被当成实测值。</summary>
+    public string EndToEndBreakdown
+    {
+        get => _endToEndBreakdown;
+        private set => Set(ref _endToEndBreakdown, value);
     }
 
     public string WavDumpStatusText
@@ -547,7 +564,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SilentCallbacksText = "0";
         DiscontinuitiesText = "0";
         SendErrorsText = "0";
-        NominalLatencyText = "-";
+        CaptureDelayText = "-";
+        EndToEndText = "-";
+        EndToEndBreakdown = "等待手机回报";
         HasPhoneReport = false;
         PhoneWaterText = "-";
         PhoneTargetText = "-";
@@ -799,9 +818,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SilentCallbacksText = snapshot.SilentCallbacks.ToString("N0");
         DiscontinuitiesText = snapshot.Discontinuities.ToString("N0");
         SendErrorsText = snapshot.SendErrors.ToString("N0");
-        NominalLatencyText = snapshot.NominalLatencyMs > 0
-            ? $"{snapshot.NominalLatencyMs:F1} ms"
-            : "-";
+        // PC 侧抓取延迟：环回按引擎周期成批投递，一帧数据平均多等半个周期。
+        // 不能把"抓取缓冲"算进来——我们每次回调都把可用数据读空，那 22 ms 缓冲并不构成延迟，
+        // 旧公式把 EnginePeriod + BufferFrames 相加，在 S/PDIF 上直接虚报了近 30 ms。
+        var captureDelayMs = observedPeriodMs > 0 ? observedPeriodMs * 0.5 : 0;
+        CaptureDelayText = captureDelayMs > 0 ? $"{captureDelayMs:F2} ms" : "-";
 
         if (_wavDumpEnabled && snapshot.PacketsSent > 0)
         {
@@ -821,6 +842,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             PhoneAgeText = snapshot.SecondsSincePhoneReport > 600
                 ? "-"
                 : $"{snapshot.SecondsSincePhoneReport:F1} s";
+
+            // 端到端平均 ≈ PC 抓取（半周期） + 环水位（算法延迟） + 手机输出延迟（Oboe/HAL）。
+            // 不含单向网络延迟：两端无时钟同步，量不出来；USB 上约 1 ms，量级上可忽略。
+            var e2e = captureDelayMs + report.WaterMs + report.LatencyMs;
+            EndToEndText = e2e > 0 ? $"{e2e:F0} ms" : "-";
+            EndToEndBreakdown = captureDelayMs > 0
+                ? $"抓取 {captureDelayMs:F1} + 水位 {report.WaterMs} + 输出 {report.LatencyMs}"
+                : $"水位 {report.WaterMs} + 输出 {report.LatencyMs}";
         }
         else
         {
@@ -831,6 +860,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             PhoneLostText = "-";
             PhoneLatencyText = "-";
             PhoneAgeText = "-";
+            EndToEndText = "-";
+            EndToEndBreakdown = "等待手机回报";
         }
     }
 

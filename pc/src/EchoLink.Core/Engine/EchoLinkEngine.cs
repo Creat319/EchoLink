@@ -47,7 +47,6 @@ public sealed class EchoLinkSnapshot
     public long Discontinuities { get; init; }
     public double PeakLevel { get; init; }
     public double RmsLevel { get; init; }
-    public double NominalLatencyMs { get; init; }
     public string? LastError { get; init; }
     public IReadOnlyList<string> Candidates { get; init; } = Array.Empty<string>();
     public PhoneReport? Phone { get; init; }
@@ -303,7 +302,6 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             Discontinuities = counters?.Discontinuities ?? 0,
             PeakLevel = _peakHold,
             RmsLevel = _rmsInstant,
-            NominalLatencyMs = (info?.EnginePeriodMs ?? 0) + (info is null ? 0 : 1000.0 * info.BufferFrames / info.Format.SampleRate),
             LastError = _lastError,
             Candidates = _candidates.Select(c => c.ToString()).ToList(),
             Phone = report,

@@ -337,6 +337,22 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream* /*stream*/
         if (gap > _maxCallbackGapNanos.load(std::memory_order_relaxed)) {
             _maxCallbackGapNanos.store(gap, std::memory_order_relaxed);
         }
+
+        // 用于"Oboe 缓冲该多大"的那个量要干净得多：
+        //  - 跳过开流后 1 秒（首个回调晚 200 ms 是正常启动过程，不是调度迟到；
+        //    真机上它把缓冲一路顶到 4 burst 且再也降不回来）
+        //  - 忽略 >100 ms 的空档（流级停顿，任何缓冲都盖不住，单独计数）
+        if (_firstCallbackNanos == 0) {
+            _firstCallbackNanos = now;
+        }
+
+        const bool warmedUp = (now - _firstCallbackNanos) > 1'000'000'000LL;
+        if (warmedUp && gap < 100'000'000LL) {
+            int64_t current = _schedGapMaxNs.load(std::memory_order_relaxed);
+            while (gap > current &&
+                   !_schedGapMaxNs.compare_exchange_weak(current, gap, std::memory_order_relaxed)) {
+            }
+        }
     }
 
     _callbackCount.fetch_add(1, std::memory_order_relaxed);
@@ -673,6 +689,8 @@ void AudioEngine::fillStats(double* out, int32_t length) {
     out[kWaterMinFrames] = waterMin == INT64_MAX ? static_cast<double>(water) : static_cast<double>(waterMin);
     out[kMaxCallbackFrames] = static_cast<double>(_maxCallbackFrames.load(std::memory_order_relaxed));
     out[kPrefillActive] = _prefillPending.load(std::memory_order_relaxed) ? 1.0 : 0.0;
+    const int64_t schedGap = _schedGapMaxNs.exchange(0, std::memory_order_relaxed);
+    out[kSchedGapMaxMs] = static_cast<double>(schedGap) / 1'000'000.0;
 }
 
 }  // namespace echolink
