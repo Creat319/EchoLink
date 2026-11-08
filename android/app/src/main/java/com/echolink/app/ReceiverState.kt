@@ -54,6 +54,10 @@ data class ReceiverState(
     val micPeak: Double = 0.0,
     val micDuckGain: Float = 1.0f,
     val micError: String? = null,
+
+    // ---- 版本自检 ----
+    val updateCheckText: String = "",
+    val latestVersion: String? = null,
 ) {
     val isRunning: Boolean get() = phase != LinkPhase.STOPPED
     val targetWaterFrames: Long get() = engine.targetWaterFrames
@@ -80,5 +84,10 @@ object EchoLinkStateHolder {
     fun updateSettings(settings: ReceiverSettings) {
         liveSettings = settings
         mutable.value = mutable.value.copy(settings = settings)
+    }
+
+    /** 版本自检结果（Activity 在 IO 线程查完写回）。 */
+    fun setUpdate(text: String, latestVersion: String?) {
+        mutable.value = mutable.value.copy(updateCheckText = text, latestVersion = latestVersion)
     }
 }

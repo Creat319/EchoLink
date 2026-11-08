@@ -474,6 +474,9 @@ class AudioEngineController(
 
     private fun publish(statusText: String) {
         val network = receiver?.snapshot ?: NetworkSnapshot()
+        // 版本自检的结果由 Activity 写入，这里必须原样带过去，
+        // 否则每 500 ms 一次的状态发布会把它冲掉。
+        val previous = EchoLinkStateHolder.state.value
         EchoLinkStateHolder.publish(
             ReceiverState(
                 phase = phase,
@@ -501,6 +504,8 @@ class AudioEngineController(
                 micPeak = (micUplink?.peakLevel ?: 0.0) / 32768.0,
                 micDuckGain = lastDuckGain,
                 micError = micUplink?.openError,
+                updateCheckText = previous.updateCheckText,
+                latestVersion = previous.latestVersion,
             ),
         )
     }

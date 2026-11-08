@@ -68,7 +68,31 @@
                         <TextBlock Text="{Binding LinkDescription}"
                                    Style="{StaticResource AppSubtitle}"
                                    Margin="10,0,0,0" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="440" />
+                                   TextTrimming="CharacterEllipsis" MaxWidth="330" />
+
+                        <!-- 版本自检：有新版本时是可点的下载链接，否则只显示检查结果 -->
+                        <Button Content="{Binding UpdateStatusText}"
+                                Command="{Binding CheckUpdateCommand}"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="8,0"
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Center"
+                                FontSize="11"
+                                Opacity="0.55"
+                                Visibility="{Binding HasNoUpdate, Converter={StaticResource BoolToVisibility}}" />
+
+                        <Button Content="{Binding UpdateLinkText}"
+                                Command="{Binding OpenDownloadCommand}"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="8,0"
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Center"
+                                FontSize="11.5"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BrandGreen}"
+                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                 </StackPanel>
 

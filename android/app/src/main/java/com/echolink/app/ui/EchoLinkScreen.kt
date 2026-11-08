@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -52,6 +54,8 @@ fun EchoLinkApp(
     onConfirmBeep: (Boolean) -> Unit,
     onReopen: () -> Unit,
     onSettingsChange: (ReceiverSettings) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onOpenDownload: () -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -89,6 +93,7 @@ fun EchoLinkApp(
 
             item { AddressCard(state) }
             item { SettingsCard(state, onSettingsChange) }
+            item { UpdateCard(state, onCheckUpdate, onOpenDownload) }
             item { LogCard(state) }
         }
     }
@@ -482,6 +487,48 @@ private fun SettingsCard(state: ReceiverState, onSettingsChange: (ReceiverSettin
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
         )
+    }
+}
+
+/**
+ * 版本自检。只提示、不自动安装：APK 由浏览器下载后由用户手动安装。
+ */
+@Composable
+private fun UpdateCard(state: ReceiverState, onCheckUpdate: () -> Unit, onOpenDownload: () -> Unit) {
+    val context = LocalContext.current
+    val currentVersion = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "-"
+    }
+
+    SectionCard(title = "版本", accent = MaterialTheme.colorScheme.outline) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("当前 v$currentVersion", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = if (state.updateCheckText.isBlank()) "尚未检查" else state.updateCheckText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Button(onClick = onCheckUpdate) {
+                Text("检查更新")
+            }
+        }
+
+        if (state.latestVersion != null) {
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onOpenDownload,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                ),
+            ) {
+                Text("下载 ${state.latestVersion}")
+            }
+        }
     }
 }
 

@@ -66,6 +66,25 @@ C:\Android\Sdk\platform-tools\adb.exe install -r .\artifacts\echolink-arm64-debu
 手机必须先开 **开发者选项 → USB 调试**。只开“USB 网络共享”时 `adb devices` 是空的
 （本机就踩到了这个：RNDIS 适配器在、网关能通、但 adb 看不到设备）。
 
+### 3.1.1 发新版时要同步的三件事
+
+客户端内置版本自检（见 CHANGELOG v0.3.1），发版时这三处必须一起改，否则用户端行为会不一致：
+
+| 位置 | 要改什么 |
+| --- | --- |
+| 代码里的版本号 | `pc/Directory.Build.props` 的 `<Version>`、`android/app/build.gradle.kts` 的 `versionName`/`versionCode` |
+| 版本接口 | `http://carovo.shop/api/version.php` 的返回值改成同一个版本号（接口由项目维护者控制） |
+| 下载地址 | 上传 `winclient.zip` 与 APK 覆盖 `http://el.carovo.shop/` 下同名文件 |
+
+接口返回的版本**低于或等于**客户端时不会提示（这是刻意的：服务端回滚不该弹"有新版本"）。
+所以忘了改接口的后果是"没人收到更新提示"，而不是"所有人都被提示更新"。
+
+> 已知的两个服务端小毛病（2026-11 实测）：
+> - APK 的 `Content-Type` 返回 `text/plain`，部分浏览器会当文本显示而不是下载；
+>   建议改成 `application/vnd.android.package-archive`。
+> - 版本接口与下载页都是明文 HTTP，可被中间人篡改。影响面限于"弹一个假提示"，
+>   但正解是给域名上 HTTPS。
+
 ### 3.2 release 签名
 
 `app/build.gradle.kts` 没有配置签名，`assembleRelease` 产出的是未签名 APK。自己签名：

@@ -1,5 +1,12 @@
 package com.echolink.app
 
+import com.echolink.app.update.UpdateChecker
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.lifecycleScope
+import android.net.Uri
+import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -67,8 +74,53 @@ class MainActivity : ComponentActivity() {
                     onConfirmBeep = { heard -> AudioReceiverService.confirm(this, heard) },
                     onReopen = { AudioReceiverService.reopen(this) },
                     onSettingsChange = applySettings,
+                    onCheckUpdate = { checkUpdates() },
+                    onOpenDownload = { openDownloadPage() },
                 )
             }
+        }
+
+        // 启动时静默查一次；失败也不打扰用户（离线是常态）
+        checkUpdates(quiet = true)
+    }
+
+    /** 当前版本名（versionName），用于和接口返回值比较。 */
+    private fun currentVersion(): String = runCatching {
+        packageManager.getPackageInfo(packageName, 0).versionName
+    }.getOrNull() ?: "0.0.0"
+
+    /**
+     * 版本自检。**只提示、不自动下载**：APK 交给浏览器，用户能看到域名再决定装不装。
+     */
+    private fun checkUpdates(quiet: Boolean = false) {
+        if (!quiet) {
+            EchoLinkStateHolder.setUpdate("正在检查更新…", null)
+        }
+
+        lifecycleScope.launch {
+            val local = currentVersion()
+            val result = withContext(Dispatchers.IO) { UpdateChecker.check(local) }
+
+            when {
+                result == null -> {
+                    if (!quiet) {
+                        EchoLinkStateHolder.setUpdate("检查失败（离线或服务不可用）", null)
+                    }
+                }
+
+                result.isNewer -> EchoLinkStateHolder.setUpdate(
+                    "有新版本 ${result.latestVersion}（当前 v$local）",
+                    result.latestVersion,
+                )
+
+                else -> EchoLinkStateHolder.setUpdate("已是最新（v$local）", null)
+            }
+        }
+    }
+
+    private fun openDownloadPage() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.ANDROID_DOWNLOAD_URL)))
         }
     }
 

@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using EchoLink.Core.Engine;
 using EchoLink.Core.Protocol;
 using EchoLink.Core.Transport;
+using EchoLink.Core.Update;
 using EchoLink.Core.Wasapi;
 using EchoLink.App.Models;
 using NAudio.CoreAudioApi;
@@ -113,6 +114,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RescanCandidatesCommand = new RelayCommand(RescanCandidates);
         BrowseWavCommand = new RelayCommand(BrowseWav);
         ToggleCandidatesCommand = new RelayCommand(() => ShowCandidates = !ShowCandidates);
+        CheckUpdateCommand = new RelayCommand(() => _ = CheckUpdatesAsync());
+        OpenDownloadCommand = new RelayCommand(OpenDownloadPage);
 
         ApplySettingsToState();
         RefreshDevices();
@@ -121,6 +124,64 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
         _timer.Tick += (_, _) => RefreshSnapshot();
         _timer.Start();
+
+        // 启动后静默查一次版本；失败不打扰（离线是常态）
+        _ = CheckUpdatesAsync(quiet: true);
+    }
+
+    public RelayCommand CheckUpdateCommand { get; }
+
+    public RelayCommand OpenDownloadCommand { get; }
+
+    /// <summary>
+    /// 版本自检。**只提示 + 打开下载页**，不自动下载、不自动运行：
+    /// 更新包是 zip/exe，自动执行等于把更新通道变成远程代码执行入口。
+    /// </summary>
+    private async Task CheckUpdatesAsync(bool quiet = false)
+    {
+        if (!quiet)
+        {
+            UpdateStatusText = "正在检查更新…";
+        }
+
+        var info = await UpdateChecker.CheckAsync();
+        if (info is null)
+        {
+            if (!quiet)
+            {
+                UpdateStatusText = "检查失败（离线或服务不可用）";
+            }
+
+            return;
+        }
+
+        if (UpdateChecker.IsNewer(info.Version, LocalVersion))
+        {
+            HasUpdate = true;
+            UpdateLinkText = $"有新版本 {info.Version} · 下载";
+            AppendLog($"[更新] 发现新版本 {info.Version}（当前 {LocalVersion}）：{UpdateChecker.WindowsDownloadUrl}");
+        }
+        else
+        {
+            HasUpdate = false;
+            UpdateStatusText = $"已是最新 v{LocalVersion}";
+        }
+    }
+
+    private void OpenDownloadPage()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(UpdateChecker.WindowsDownloadUrl)
+            {
+                UseShellExecute = true,
+            });
+            AppendLog("[更新] 已在浏览器打开下载页：" + UpdateChecker.WindowsDownloadUrl);
+        }
+        catch (Exception ex)
+        {
+            AppendLog("[更新] 打开下载页失败：" + ex.Message);
+        }
     }
 
     // ==================================================================== 集合与命令
@@ -143,6 +204,37 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand BrowseWavCommand { get; }
 
     public RelayCommand ToggleCandidatesCommand { get; }
+
+    // ==================================================================== 版本自检
+
+    /// <summary>"已是最新 0.3.1" / "正在检查更新…" / "检查失败（离线）"。</summary>
+    public string UpdateStatusText
+    {
+        get => _updateStatusText;
+        private set => Set(ref _updateStatusText, value);
+    }
+
+    /// <summary>"有新版本 0.4.0 · 下载"。</summary>
+    public string UpdateLinkText
+    {
+        get => _updateLinkText;
+        private set => Set(ref _updateLinkText, value);
+    }
+
+    public bool HasUpdate
+    {
+        get => _hasUpdate;
+        private set
+        {
+            if (Set(ref _hasUpdate, value))
+            {
+                OnPropertyChanged(nameof(HasNoUpdate));
+            }
+        }
+    }
+
+    /// <summary>没有新版本时显示检查结果；有新版本时换成下载链接，两者互斥。</summary>
+    public bool HasNoUpdate => !_hasUpdate;
 
     // ==================================================================== 配置属性
     public DeviceItem? SelectedDevice
@@ -411,13 +503,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _sendErrorsText, value);
     }
 
+    // ---- 版本自检 ----
+    private string _updateStatusText = string.Empty;
+    private string _updateLinkText = string.Empty;
+    private bool _hasUpdate;
+
     /// <summary>版本号（来自 Directory.Build.props 的 &lt;Version&gt;），显示在标题右侧便于排查版本不符。</summary>
-    public string AppVersionText { get; } =
-        "v" + (Assembly.GetExecutingAssembly()
+    public string AppVersionText { get; } = "v" + MainViewModel.LocalVersion;
+
+    /// <summary>纯版本号（无 v 前缀），用于和接口返回值比较。</summary>
+    public static string LocalVersion { get; } =
+        Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion.Split('+')[0]
-            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
-            ?? "0.0.0");
+        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
+        ?? "0.0.0";
 
     /// <summary>PC 侧抓取延迟（半个抓取周期）。</summary>
     public string CaptureDelayText

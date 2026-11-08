@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    版本自检接口与下载页走的是明文 HTTP，Android 9 (API 28) 起默认禁止。
+    这里**只**放行这两个域名，不做全局 usesCleartextTraffic，避免把整个应用的
+    明文流量闸门都打开（音频走 UDP，不受这条影响）。
+
+    注意：明文 HTTP 无法防中间人篡改。它的后果仅限于"弹一个假的更新提示"，
+    因为真正的下载仍由浏览器打开、用户能看到域名。要彻底消除风险得给
+    carovo.shop 上 HTTPS 证书。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">carovo.shop</domain>
+        <domain includeSubdomains="true">el.carovo.shop</domain>
+    </domain-config>
+</network-security-config>
