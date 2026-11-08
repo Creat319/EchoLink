@@ -555,24 +555,34 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     private List<(IPEndPoint Target, string Label)> ResolveTargets()
     {
         var list = new List<(IPEndPoint, string)>();
+        var manualText = _options.ManualTargetAddress;
+        IPAddress? manualAddress = null;
+        var manualOk = !string.IsNullOrWhiteSpace(manualText)
+                       && IPAddress.TryParse(manualText, out manualAddress);
 
-        if (!string.IsNullOrWhiteSpace(_options.ManualTargetAddress))
+        if (!string.IsNullOrWhiteSpace(_options.ManualTargetAddress) && !manualOk)
         {
-            if (IPAddress.TryParse(_options.ManualTargetAddress, out var manual))
-            {
-                list.Add((new IPEndPoint(manual, _options.AudioPort), "手动指定"));
-                _candidates = Array.Empty<TargetCandidate>();
-                return list;
-            }
-
             Log($"手动地址无法解析：{_options.ManualTargetAddress}");
         }
 
+        // 手动模式：只用用户填的地址。
         if (!_options.AutoDiscoverTarget)
         {
+            if (!manualOk)
+            {
+                Log("已选择手动指定地址，但地址为空或无法解析 —— 请在“手机地址”卡片里填手机 IP");
+                return list;
+            }
+
+            list.Add((new IPEndPoint(manualAddress!, _options.AudioPort), "手动指定"));
+            WarnIfLoopback(manualAddress!);
+            _candidates = Array.Empty<TargetCandidate>();
             return list;
         }
 
+        // 自动模式：先按网卡评分探测，**手动地址只作为最后的兜底**。
+        // 这里曾经写成"手动地址非空就直接返回"，导致界面上选着自动发现、
+        // 实际却一直往残留的手动地址发包，表现为"两端都正常但收不到回报"。
         _candidates = TargetDiscovery.DiscoverCandidates();
         foreach (var candidate in _candidates)
         {
@@ -585,7 +595,26 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             list.Add((new IPEndPoint(address, _options.AudioPort), candidate.AdapterName));
         }
 
+        if (manualOk)
+        {
+            list.Add((new IPEndPoint(manualAddress!, _options.AudioPort), "手动指定（备用）"));
+            WarnIfLoopback(manualAddress!);
+        }
+
         return list;
+    }
+
+    /// <summary>
+    /// 回环地址永远到不了手机，但收发都"成功"，症状是两端都显示正常却没有回报。
+    /// 骗过一次人，所以显式提示。
+    /// </summary>
+    private void WarnIfLoopback(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address))
+        {
+            Log($"⚠ 目标 {address} 是本机回环地址，音频不会离开这台电脑。" +
+                "如果手机没连上，请改成「自动发现」或填手机实际 IP（手机界面会显示）。");
+        }
     }
 
     private double SecondsSinceReport()

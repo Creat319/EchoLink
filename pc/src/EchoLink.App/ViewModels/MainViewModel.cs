@@ -890,7 +890,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AudioPort = _audioPort,
         ReportPort = _reportPort,
         AutoDiscoverTarget = _autoDiscover,
-        ManualTargetAddress = string.IsNullOrWhiteSpace(_manualTarget) ? null : _manualTarget.Trim(),
+        // 自动发现时不要把输入框里的残留值交给引擎：界面虽然禁用了该框，
+        // 旧值仍会被读出来用，曾因此一直往 127.0.0.1 发包、两端却都显示"正常"。
+        ManualTargetAddress = _autoDiscover || string.IsNullOrWhiteSpace(_manualTarget)
+            ? null
+            : _manualTarget.Trim(),
         ProbeTimeoutMs = 1200,
         WavDumpPath = _wavDumpEnabled && !string.IsNullOrWhiteSpace(_wavDumpPath) ? _wavDumpPath : null,
         EnableMic = _enableMic,
