@@ -144,6 +144,30 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- 上行麦克风 -->
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Text="上行麦克风" Style="{StaticResource SectionTitle}" />
+
+                            <CheckBox Content="把手机麦克风当本机麦克风"
+                                      IsChecked="{Binding EnableMic}"
+                                      Margin="0,0,0,6" />
+
+                            <ComboBox ItemsSource="{Binding Devices}"
+                                      SelectedItem="{Binding SelectedMicDevice}"
+                                      DisplayMemberPath="DisplayName"
+                                      Margin="0,0,0,6" />
+
+                            <TextBlock Text="渲染到虚拟声卡的输入端（如 VB-Cable 的 CABLE Input），会议软件再选它的输出端当麦克风。"
+                                       Style="{StaticResource AppSubtitle}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,6" />
+
+                            <controls:MetricRow Label="上行状态" Value="{Binding MicStatusText}" />
+                            <controls:MetricRow Label="上行水位 / 包数" Value="{Binding MicWaterText}" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- 手机地址 -->
                     <Border Style="{StaticResource CardPanel}">
                         <StackPanel>

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using EchoLink.Core.Audio;
 using EchoLink.Core.Protocol;
 
 namespace EchoLink.Core.Transport;
@@ -71,6 +72,12 @@ public sealed class UdpAudioTransport : IDisposable
 
     public event Action<PhoneReport, IPEndPoint>? ReportReceived;
 
+    /// <summary>上行麦克风的落点（协议 v3 起：包头 stream=1 的包）。</summary>
+    public IUplinkSink? UplinkSink { get; set; }
+
+    /// <summary>最近一次收到上行音频包的对端地址，用于诊断。</summary>
+    public IPEndPoint? UplinkSource { get; private set; }
+
     public void Send(ReadOnlySpan<byte> packet)
     {
         var remote = Remote;
@@ -107,16 +114,49 @@ public sealed class UdpAudioTransport : IDisposable
                 }
 
                 var received = _socket.ReceiveFrom(_receiveBuffer, ref endpoint);
-                if (received < PhoneReport.Size)
+                // 回报包 40 B、上行音频包 20 B 头起，统一先按最小包头判断
+                if (received < PacketFormat.HeaderBytes)
                 {
                     continue;
                 }
 
-                if (PhoneReport.TryParse(_receiveBuffer.AsSpan(0, received), DateTimeOffset.Now, out var report)
-                    && endpoint is IPEndPoint source)
+                if (endpoint is not IPEndPoint source)
+                {
+                    continue;
+                }
+
+                // 协议 v3：同一个 socket 上还有上行音频包（stream=1），先按音频包试解析。
+                // 音频包头 20 B，回报包 40 B，两者靠 magic 区分：音频包首字段是 seq，
+                // 而回报包首字段是固定 magic，所以先试回报、再试音频最省。
+                if (PhoneReport.TryParse(_receiveBuffer.AsSpan(0, received), DateTimeOffset.Now, out var report))
                 {
                     ReportReceived?.Invoke(report, source);
+                    continue;
                 }
+
+                var sink = UplinkSink;
+                if (sink is null || received < PacketFormat.HeaderBytes)
+                {
+                    continue;
+                }
+
+                if (!AudioPacketHeader.TryRead(_receiveBuffer.AsSpan(0, received), out var header) || !header.IsUplink)
+                {
+                    continue;
+                }
+
+                var payloadBytes = received - PacketFormat.PayloadOffset;
+                if (payloadBytes <= 0 || payloadBytes % PacketFormat.MicBytesPerFrame != 0)
+                {
+                    continue;
+                }
+
+                var frames = payloadBytes / PacketFormat.MicBytesPerFrame;
+                UplinkSource = source;
+                sink.PushMic(
+                    System.Runtime.InteropServices.MemoryMarshal.Cast<byte, short>(
+                        _receiveBuffer.AsSpan(PacketFormat.PayloadOffset, payloadBytes)),
+                    frames);
             }
             catch (SocketException)
             {

@@ -389,6 +389,37 @@ private fun SettingsCard(state: ReceiverState, onSettingsChange: (ReceiverSettin
 
     SectionCard(title = "设置", accent = MaterialTheme.colorScheme.outline) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("上行麦克风（手机当 PC 麦克风）", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "需要重启接收才生效；PC 端要选虚拟麦克风（如 CABLE Input）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Switch(
+                checked = state.settings.micEnabled,
+                onCheckedChange = { onSettingsChange(state.settings.copy(micEnabled = it)) },
+            )
+        }
+
+        if (state.micRunning) {
+            MetricRow("上行已发送", "${state.micPackets} 包", hint = state.micSource)
+            MetricRow(
+                "上行电平",
+                String.format(Locale.US, "%.3f", state.micPeak),
+                hint = if (state.micDuckGain < 1.0f) "已压低 20 dB" else "正常",
+            )
+        } else if (state.settings.micEnabled && state.isRunning) {
+            Text(
+                text = "上行麦克风未运行：${state.micError ?: "等待授权或端口"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text("独占模式（拿不到会自动回退共享）", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Switch(
                 checked = state.settings.requestExclusive,

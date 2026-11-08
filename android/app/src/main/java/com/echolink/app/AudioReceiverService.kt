@@ -82,12 +82,16 @@ class AudioReceiverService : Service() {
     private fun startInForeground() {
         val notification = buildNotification(EchoLinkStateHolder.state.value)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceCompat.startForeground(
-                this,
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-            )
+            // 开麦克风时必须声明 microphone 类型，否则 Android 14 会直接抛异常；
+            // mediaPlayback 一直保留，因为下行播放同时在跑。
+            val types = if (EchoLinkStateHolder.liveSettings.micEnabled) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            }
+
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, types)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }

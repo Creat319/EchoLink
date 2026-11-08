@@ -14,6 +14,7 @@ class SettingsStore(context: Context) {
         autoTargetWater = prefs.getBoolean(KEY_AUTO_TARGET, true),
         manualTargetWaterMs = prefs.getInt(KEY_MANUAL_TARGET, 30),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
+        micEnabled = prefs.getBoolean(KEY_MIC_ENABLED, false),
     )
 
     fun save(settings: ReceiverSettings) {
@@ -23,6 +24,7 @@ class SettingsStore(context: Context) {
             .putBoolean(KEY_AUTO_TARGET, settings.autoTargetWater)
             .putInt(KEY_MANUAL_TARGET, settings.manualTargetWaterMs)
             .putBoolean(KEY_KEEP_SCREEN_ON, settings.keepScreenOn)
+            .putBoolean(KEY_MIC_ENABLED, settings.micEnabled)
             .apply()
     }
 
@@ -32,5 +34,6 @@ class SettingsStore(context: Context) {
         const val KEY_AUTO_TARGET = "auto_target"
         const val KEY_MANUAL_TARGET = "manual_target_ms"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_MIC_ENABLED = "mic_enabled"
     }
 }

@@ -53,6 +53,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _wavDumpEnabled;
     private string _wavDumpPath = string.Empty;
 
+    // ---------------- 上行麦克风 ----------------
+    private bool _enableMic;
+    private DeviceItem? _selectedMicDevice;
+    private string _micStatusText = "未启用";
+    private string _micWaterText = "-";
+
     // ---------------- 运行时状态 ----------------
     private bool _isRunning;
     private string _linkStateText = "未启动";
@@ -143,6 +149,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _selectedDevice;
         set => Set(ref _selectedDevice, value);
+    }
+
+    // ---- 上行麦克风：把手机麦克风渲染到这个端点（通常是虚拟声卡的 CABLE Input）----
+    public bool EnableMic
+    {
+        get => _enableMic;
+        set => Set(ref _enableMic, value);
+    }
+
+    public DeviceItem? SelectedMicDevice
+    {
+        get => _selectedMicDevice;
+        set => Set(ref _selectedMicDevice, value);
+    }
+
+    public string MicStatusText
+    {
+        get => _micStatusText;
+        private set => Set(ref _micStatusText, value);
+    }
+
+    public string MicWaterText
+    {
+        get => _micWaterText;
+        private set => Set(ref _micWaterText, value);
     }
 
     public int ModeIndex
@@ -667,6 +698,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         SelectedDevice = Devices.FirstOrDefault(d => d.Id == previousId) ?? defaultItem;
+
+        // 上行默认挑虚拟声卡的渲染侧（VB-Cable 的 CABLE Input 之类）。
+        // 名字里带 cable / virtual / 入梦 的都算候选。
+        if (_selectedMicDevice is null || !Devices.Contains(_selectedMicDevice))
+        {
+            _selectedMicDevice = Devices
+                .Where(d => d.Id is not null)
+                .FirstOrDefault(d => d.IsVirtual || LooksMicSink(d.Name))
+                ?? Devices.FirstOrDefault(d => d.Id is not null);
+            OnPropertyChanged(nameof(SelectedMicDevice));
+        }
+    }
+
+    private static bool LooksMicSink(string name)
+    {
+        var text = name.ToLowerInvariant();
+        return text.Contains("cable") || text.Contains("virtual") || text.Contains("mic") || name.Contains("入梦");
     }
 
     private static bool LooksVirtual(string friendlyName)
@@ -745,6 +793,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ManualTargetAddress = string.IsNullOrWhiteSpace(_manualTarget) ? null : _manualTarget.Trim(),
         ProbeTimeoutMs = 1200,
         WavDumpPath = _wavDumpEnabled && !string.IsNullOrWhiteSpace(_wavDumpPath) ? _wavDumpPath : null,
+        EnableMic = _enableMic,
+        MicDeviceId = _selectedMicDevice?.Id,
+        MicDeviceName = _selectedMicDevice?.Name ?? "（未选择虚拟麦克风）",
     };
 
     // ==================================================================== 状态刷新
@@ -840,6 +891,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var phone = snapshot.Phone;
         HasPhoneReport = phone is not null;
+
+        // ---- 上行麦克风 ----
+        if (!snapshot.MicEnabled)
+        {
+            MicStatusText = _enableMic ? "未启动（引擎未运行）" : "未启用";
+            MicWaterText = "-";
+        }
+        else if (snapshot.MicError is { Length: > 0 } micError)
+        {
+            MicStatusText = "失败：" + micError;
+            MicWaterText = "-";
+        }
+        else
+        {
+            MicStatusText = snapshot.MicPackets > 0 ? "收包中" : "已打开，等待手机上行";
+            MicWaterText = snapshot.MicPackets > 0
+                ? $"{snapshot.MicWaterMs:F0} ms / {snapshot.MicPackets} 包"
+                : "-";
+        }
         if (phone is { } report)
         {
             PhoneWaterText = $"{report.WaterMs} ms";
@@ -944,6 +1014,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _reportPort = _settings.ReportPort;
         _wavDumpEnabled = _settings.WavDumpEnabled;
         _wavDumpPath = _settings.WavDumpPath;
+        _enableMic = _settings.EnableMic;
 
         SelectedDevice = null;
         OnPropertyChanged(nameof(ModeIndex));
@@ -971,6 +1042,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _settings.ReportPort = _reportPort;
         _settings.WavDumpEnabled = _wavDumpEnabled;
         _settings.WavDumpPath = _wavDumpPath;
+        _settings.EnableMic = _enableMic;
+        _settings.MicDeviceId = _selectedMicDevice?.Id;
+        _settings.MicDeviceName = _selectedMicDevice?.Name ?? "（未选择虚拟麦克风）";
         _settings.Save();
     }
 

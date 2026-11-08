@@ -23,7 +23,7 @@ import org.junit.Test
 class InteropVectorTest {
 
     private companion object {
-        const val REAL_HEADER_HEX = "04000000C003000000000000A8D20200"
+        const val REAL_HEADER_HEX = "D84D010000ECA6000000000000FD970D00000000"
     }
 
     private fun realPacket(): ByteBuffer {
@@ -41,14 +41,16 @@ class InteropVectorTest {
         val header = AudioPacketCodec.readHeader(realPacket())
         assertNotNull(header)
 
-        assertEquals(4, header!!.sequence)
-        assertEquals(960L, header.sampleCount)
-        assertEquals(185_000, header.timestampMicros)
+        // 协议 v3 重新抓的向量：128 帧包、stream=0（下行）
+        assertEquals(85464, header!!.sequence)
+        assertEquals(10_939_392L, header.sampleCount)
+        assertEquals(228_064_512, header.timestampMicros)
+        assertEquals(Protocol.STREAM_DOWNLINK, header.stream)
     }
 
     @Test
     fun payloadStartsRightAfterHeaderAsStereoPairs() {
-        assertEquals(16, Protocol.HEADER_BYTES)
+        assertEquals(20, Protocol.HEADER_BYTES)
         assertEquals(Protocol.PAYLOAD_BYTES, Protocol.PACKET_BYTES - Protocol.HEADER_BYTES)
 
         val packet = realPacket().order(ByteOrder.LITTLE_ENDIAN)
@@ -60,7 +62,8 @@ class InteropVectorTest {
     @Test
     fun sequenceAndSampleCountStayInStep() {
         val header = AudioPacketCodec.readHeader(realPacket())!!
-        // 发送端不变量：sampleCount == seq * 240（本次会话从 0 起）
-        assertEquals(header.sequence.toLong() * Protocol.FRAMES_PER_PACKET, header.sampleCount)
+        // 发送端不变量（v2 起包长可变）：sampleCount == seq × 该次抓包的每包帧数。
+        // 这份向量取自板载 2.67 ms 端点，每包 128 帧。
+        assertEquals(header.sequence.toLong() * 128L, header.sampleCount)
     }
 }

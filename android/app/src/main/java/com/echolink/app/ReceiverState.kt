@@ -20,6 +20,9 @@ data class ReceiverSettings(
     val autoTargetWater: Boolean = true,
     val manualTargetWaterMs: Int = 30,
     val keepScreenOn: Boolean = false,
+
+    /** 上行麦克风：把手机麦克风发回 PC 当麦克风用。 */
+    val micEnabled: Boolean = false,
 )
 
 /** UI 唯一的状态源。由 AudioEngineController 覆盖写，Activity 只读。 */
@@ -43,6 +46,14 @@ data class ReceiverState(
     val beepPromptVisible: Boolean = false,
     val beepConfirmed: Boolean? = null,
     val log: List<String> = emptyList(),
+
+    // ---- 上行麦克风 ----
+    val micRunning: Boolean = false,
+    val micSource: String = "-",
+    val micPackets: Long = 0,
+    val micPeak: Double = 0.0,
+    val micDuckGain: Float = 1.0f,
+    val micError: String? = null,
 ) {
     val isRunning: Boolean get() = phase != LinkPhase.STOPPED
     val targetWaterFrames: Long get() = engine.targetWaterFrames

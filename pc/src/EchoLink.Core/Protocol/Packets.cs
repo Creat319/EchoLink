@@ -2,21 +2,27 @@ using System.Buffers.Binary;
 
 namespace EchoLink.Core.Protocol;
 
-/// <summary>音频包（PC → 手机），976 字节。</summary>
+/// <summary>音频包（下行 PC → 手机 / 上行 手机 → PC），20 字节包头 + 变长 PCM。</summary>
 public readonly struct AudioPacketHeader
 {
-    public AudioPacketHeader(uint sequence, ulong sampleCount, uint timestampMicros)
+    public AudioPacketHeader(uint sequence, ulong sampleCount, uint timestampMicros, uint stream = PacketFormat.StreamDownlink)
     {
         Sequence = sequence;
         SampleCount = sampleCount;
         TimestampMicros = timestampMicros;
+        Stream = stream;
     }
 
     public uint Sequence { get; }
     public ulong SampleCount { get; }
     public uint TimestampMicros { get; }
 
-    /// <summary>写入 16 字节包头。</summary>
+    /// <summary>0 = 下行系统音频，1 = 上行麦克风。协议 v3 起才有。</summary>
+    public uint Stream { get; }
+
+    public bool IsUplink => Stream == PacketFormat.StreamUplink;
+
+    /// <summary>写入 20 字节包头。</summary>
     public void WriteTo(Span<byte> destination)
     {
         if (destination.Length < PacketFormat.HeaderBytes)
@@ -27,6 +33,7 @@ public readonly struct AudioPacketHeader
         BinaryPrimitives.WriteUInt32LittleEndian(destination, Sequence);
         BinaryPrimitives.WriteUInt64LittleEndian(destination[PacketFormat.SampleCountOffset..], SampleCount);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[PacketFormat.TimestampOffset..], TimestampMicros);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[PacketFormat.StreamOffset..], Stream);
     }
 
     public static bool TryRead(ReadOnlySpan<byte> packet, out AudioPacketHeader header)
@@ -41,11 +48,13 @@ public readonly struct AudioPacketHeader
         var sequence = BinaryPrimitives.ReadUInt32LittleEndian(packet);
         var sampleCount = BinaryPrimitives.ReadUInt64LittleEndian(packet[PacketFormat.SampleCountOffset..]);
         var timestamp = BinaryPrimitives.ReadUInt32LittleEndian(packet[PacketFormat.TimestampOffset..]);
-        header = new AudioPacketHeader(sequence, sampleCount, timestamp);
+        var stream = BinaryPrimitives.ReadUInt32LittleEndian(packet[PacketFormat.StreamOffset..]);
+        header = new AudioPacketHeader(sequence, sampleCount, timestamp, stream);
         return true;
     }
 
-    public override string ToString() => $"seq={Sequence} frames={SampleCount} ts={TimestampMicros}us";
+    public override string ToString()
+        => $"seq={Sequence} frames={SampleCount} ts={TimestampMicros}us stream={Stream}";
 }
 
 /// <summary>状态回报包（手机 → PC），40 字节。PC 侧只用于显示与诊断，不参与音频链路。</summary>

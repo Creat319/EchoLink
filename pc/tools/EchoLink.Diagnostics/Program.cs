@@ -126,6 +126,28 @@ internal static class Program
             }
         }
 
+        // 录音端点：上行麦克风需要一个"能被会议软件当麦克风"的虚拟设备
+        string? defaultCaptureId = null;
+        try
+        {
+            defaultCaptureId = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia).ID;
+        }
+        catch
+        {
+            // 没有默认录音设备不影响列举
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("活动录音端点（上行麦克风的落点）：");
+        foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+        {
+            var isDefault = device.ID == defaultCaptureId ? " [默认]" : string.Empty;
+            var hint = device.FriendlyName.Contains("CABLE", StringComparison.OrdinalIgnoreCase)
+                ? "  ← 虚拟麦克风候选"
+                : string.Empty;
+            Console.WriteLine($"  {device.FriendlyName}{isDefault}{hint}");
+        }
+
         return 0;
     }
 

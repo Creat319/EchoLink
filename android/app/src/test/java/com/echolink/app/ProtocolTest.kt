@@ -23,9 +23,13 @@ class ProtocolTest {
         assertEquals(240, Protocol.FRAMES_PER_PACKET)
         assertEquals(4, Protocol.BYTES_PER_FRAME)
         assertEquals(960, Protocol.PAYLOAD_BYTES)
-        assertEquals(16, Protocol.HEADER_BYTES)
-        // 总长 976：协议的核心不变量
-        assertEquals(976, Protocol.PACKET_BYTES)
+        // 协议 v3：头 20 B（多了 4 B stream），最大包长 980
+        assertEquals(20, Protocol.HEADER_BYTES)
+        assertEquals(980, Protocol.PACKET_BYTES)
+        assertEquals(16, Protocol.STREAM_OFFSET)
+        assertEquals(1, Protocol.STREAM_UPLINK)
+        assertEquals(480, Protocol.MIC_FRAMES_PER_PACKET)
+        assertEquals(2, Protocol.MIC_BYTES_PER_FRAME)
     }
 
     @Test

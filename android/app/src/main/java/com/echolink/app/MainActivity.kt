@@ -22,6 +22,16 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* 拒绝也能跑，只是没有通知 */ }
 
+    private val micPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                // 拒绝时把开关关掉，避免 UI 显示"已开启"但实际没有上行
+                EchoLinkStateHolder.updateSettings(
+                    EchoLinkStateHolder.liveSettings.copy(micEnabled = false),
+                )
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsStore = SettingsStore(this)
@@ -49,6 +59,7 @@ class MainActivity : ComponentActivity() {
                     state = state,
                     onStart = {
                         requestNotificationPermissionIfNeeded()
+                        requestMicPermissionIfNeeded()
                         AudioReceiverService.start(this)
                     },
                     onStop = { AudioReceiverService.stop(this) },
@@ -58,6 +69,25 @@ class MainActivity : ComponentActivity() {
                     onSettingsChange = applySettings,
                 )
             }
+        }
+    }
+
+    /**
+     * 上行麦克风需要 RECORD_AUDIO。必须在 Activity 可见时请求：
+     * 前台服务在后台自行申请麦克风会被直接拒绝。
+     */
+    private fun requestMicPermissionIfNeeded() {
+        if (!EchoLinkStateHolder.liveSettings.micEnabled) {
+            return
+        }
+
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!granted) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 

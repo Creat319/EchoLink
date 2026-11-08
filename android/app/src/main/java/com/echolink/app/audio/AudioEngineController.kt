@@ -56,6 +56,9 @@ class AudioEngineController(
     private var lastBufferBumpMs = 0L
     private var traceWriter: java.io.BufferedWriter? = null
     private var lastTraceMs = 0L
+    private var micUplink: MicUplink? = null
+    private var duckUntilMs = 0L
+    private var lastDuckGain = 1.0f
     private var bufferBursts = START_BUFFER_BURSTS
     private val waterMinWindow = ArrayDeque<Double>(WATER_WINDOW_TICKS + 1)
     private var lastCallbackCount = -1L
@@ -137,6 +140,11 @@ class AudioEngineController(
             routeMonitor = AudioRouteMonitor(context) { reason -> onRouteChanged(reason) }.also { it.start() }
 
             log("开始监听 UDP ${newSettings.port}，请求 ${if (newSettings.requestExclusive) "独占" else "共享"}模式")
+
+            if (newSettings.micEnabled) {
+                startMic()
+            }
+
             startLoops()
             publish("等待 PC 数据…")
         }
@@ -155,6 +163,7 @@ class AudioEngineController(
         watchdogJob?.cancel()
         controlJob = null
         watchdogJob = null
+        stopMic()
         closeTrace()
 
         scope.launch {
@@ -266,6 +275,7 @@ class AudioEngineController(
 
         pushWaterHistory(stats.waterMs)
         writeTraceRow(nowMs, windowMinMs, decision.targetMs)
+        updateDucking(nowMs, receiver?.snapshot?.downlinkPeak ?: 0.0)
 
         // 20 Hz 采样、10 Hz 发布，避免 Compose 过度重组
         tick++
@@ -485,6 +495,12 @@ class AudioEngineController(
                 beepPromptVisible = beepPromptVisible,
                 beepConfirmed = beepConfirmed,
                 log = logLines.toList(),
+                micRunning = micUplink?.isRunning == true,
+                micSource = micUplink?.sourceLabel ?: "-",
+                micPackets = micUplink?.packetsSent ?: 0,
+                micPeak = (micUplink?.peakLevel ?: 0.0) / 32768.0,
+                micDuckGain = lastDuckGain,
+                micError = micUplink?.openError,
             ),
         )
     }
@@ -563,6 +579,52 @@ class AudioEngineController(
         }
     }
 
+    /**
+     * 启动上行麦克风。目标地址取"下行包的源地址"——手机不需要知道 PC 的 IP，
+     * 谁给我发音频我就发给谁。
+     */
+    private fun startMic() {
+        if (micUplink != null) {
+            return
+        }
+
+        val uplink = MicUplink(
+            targetProvider = { receiver?.serverEndpoint() },
+            onLog = { log(it) },
+        )
+
+        if (uplink.start()) {
+            micUplink = uplink
+            log("上行麦克风已开启（P1 半双工：下行响时自动压低），PC 端请选虚拟麦克风")
+        } else {
+            log("上行麦克风启动失败：${uplink.openError ?: "未知原因"}")
+        }
+    }
+
+    private fun stopMic() {
+        micUplink?.stop()
+        micUplink = null
+    }
+
+    /**
+     * 半双工压低：没有 AEC 时的保底手段。
+     * 下行电平超过阈值就把上行压到 −20 dB，并保持 300 ms，避免在语音停顿处反复开关。
+     */
+    private fun updateDucking(nowMs: Long, downlinkPeak: Double) {
+        val uplink = micUplink ?: return
+
+        if (downlinkPeak > DUCK_ON_PEAK) {
+            duckUntilMs = nowMs + DUCK_HOLD_MS
+        }
+
+        val ducked = nowMs < duckUntilMs
+        val gain = if (ducked) DUCK_GAIN else 1.0f
+        if (gain != lastDuckGain) {
+            lastDuckGain = gain
+            uplink.setDuckGain(gain)
+        }
+    }
+
     private fun log(message: String) {
         val line = "%s  %s".format(
             java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date()),
@@ -607,6 +669,15 @@ class AudioEngineController(
 
         /** 轨迹日志写入间隔 */
         const val TRACE_INTERVAL_MS = 10_000L
+
+        /** 半双工压低：下行峰值超过这个就压上行 */
+        const val DUCK_ON_PEAK = 0.06
+
+        /** 压低后保持的时长，避免语音停顿处反复开关 */
+        const val DUCK_HOLD_MS = 300L
+
+        /** −20 dB */
+        const val DUCK_GAIN = 0.1f
 
         /** Oboe 缓冲起始 burst 数，以及允许上调到的上限 */
         const val START_BUFFER_BURSTS = 2

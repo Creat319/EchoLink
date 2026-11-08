@@ -45,6 +45,15 @@ public sealed class AppSettings
 
     public string WavDumpPath { get; set; } = string.Empty;
 
+    // ---------------- 上行麦克风 ----------------
+    /// <summary>是否把手机麦克风渲染到虚拟麦克风端点。</summary>
+    public bool EnableMic { get; set; }
+
+    /// <summary>上行渲染目标（通常是 VB-Cable 的 CABLE Input）。</summary>
+    public string? MicDeviceId { get; set; }
+
+    public string MicDeviceName { get; set; } = "（未选择虚拟麦克风）";
+
     public static string SettingsDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "EchoLink");

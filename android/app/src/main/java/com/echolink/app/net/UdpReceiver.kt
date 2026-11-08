@@ -26,6 +26,9 @@ data class NetworkSnapshot(
     val lastArrivalAgeMs: Long = Long.MAX_VALUE,
     val senderAddress: String? = null,
     val senderRestarts: Long = 0,
+
+    /** 下行电平峰值（0–1），用于半双工压低：扬声器响的时候把上行压下去。 */
+    val downlinkPeak: Double = 0.0,
 )
 
 /**
@@ -79,6 +82,16 @@ class UdpReceiver(
     private var lastArrivalNanosGlobal = 0L
     private var senderAddress: SocketAddress? = null
     private var discontinuityPending = false
+
+    /** 下行峰值电平（原始 int16 幅度，0–32768），用于半双工压低。 */
+    @Volatile
+    private var downlinkPeak = 0.0
+
+    /**
+     * PC 的地址（下行包源地址 = PC 的 47811）。
+     * 上行麦克风要往这里发，所以必须暴露出来。
+     */
+    fun serverEndpoint(): InetSocketAddress? = senderAddress as? InetSocketAddress
 
     val isRunning: Boolean get() = running
 
@@ -156,6 +169,23 @@ class UdpReceiver(
                 Protocol.HEADER_BYTES,
                 framesInPacket,
             )
+
+            // 下行电平（每 8 个采样取一个，热路径上足够且几乎不占 CPU）：
+            // 半双工压低靠它判断"扬声器现在有没有在响"
+            var peak = downlinkPeak
+            var i = 0
+            val samples = framesInPacket * Protocol.CHANNELS
+            while (i < samples) {
+                val value = buffer.getShort(Protocol.HEADER_BYTES + (i * 2)).toInt()
+                val magnitude = kotlin.math.abs(value)
+                if (magnitude > peak) {
+                    peak = magnitude.toDouble()
+                }
+
+                i += 8
+            }
+
+            downlinkPeak = peak
 
             maybeSendReport(activeChannel, arrivalNanos)
             publishIfDue(arrivalNanos)
@@ -265,6 +295,7 @@ class UdpReceiver(
             lastArrivalAgeMs = if (lastArrivalNanosGlobal == 0L) Long.MAX_VALUE else (nowNanos - lastArrivalNanosGlobal) / 1_000_000L,
             senderAddress = (senderAddress as? InetSocketAddress)?.let { "${it.address.hostAddress}:${it.port}" },
             senderRestarts = senderRestarts,
+            downlinkPeak = (downlinkPeak / 32768.0).coerceIn(0.0, 1.0),
         )
     }
 

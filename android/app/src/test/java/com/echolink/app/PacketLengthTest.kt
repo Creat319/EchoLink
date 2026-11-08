@@ -15,14 +15,14 @@ class PacketLengthTest {
     @Test
     fun fullPacketGives240Frames() {
         assertEquals(240, Protocol.framesInDatagram(bytesFor(240)))
-        assertEquals(976, bytesFor(240))
+        assertEquals(980, bytesFor(240))
     }
 
     @Test
     fun smallPacketGives128Frames() {
-        // S/PDIF 板载端点：每回调 128 帧 → 每包 528 B
+        // S/PDIF 板载端点：每回调 128 帧 → 20 + 512 = 532 B
         assertEquals(128, Protocol.framesInDatagram(bytesFor(128)))
-        assertEquals(528, bytesFor(128))
+        assertEquals(532, bytesFor(128))
     }
 
     @Test

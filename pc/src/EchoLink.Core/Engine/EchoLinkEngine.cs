@@ -51,6 +51,16 @@ public sealed class EchoLinkSnapshot
     public IReadOnlyList<string> Candidates { get; init; } = Array.Empty<string>();
     public PhoneReport? Phone { get; init; }
     public double SecondsSincePhoneReport { get; init; }
+
+    // ---- 上行麦克风 ----
+    public bool MicEnabled { get; init; }
+    public string MicDeviceName { get; init; } = "-";
+    public string? MicError { get; init; }
+    public long MicPackets { get; init; }
+    public double MicWaterMs { get; init; }
+    public double MicRatio { get; init; }
+    public long MicUnderruns { get; init; }
+    public long MicDrops { get; init; }
 }
 
 /// <summary>
@@ -70,6 +80,7 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     private UdpAudioTransport? _transport;
     private LoopbackCapture? _capture;
     private KeepAliveRenderer? _keepAlive;
+    private MicUplinkPlayer? _micPlayer;
     private StreamingResampler? _resampler;
     private Packetizer? _packetizer;
 
@@ -129,6 +140,30 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
 
         _transport = new UdpAudioTransport(_options.ReportPort);
         _transport.ReportReceived += OnReportReceived;
+
+        // 上行：把手机送来的麦克风播放到虚拟麦克风端点。
+        // 与保活流/环回完全独立，失败不影响下行。
+        if (_options.EnableMic)
+        {
+            _micPlayer = new MicUplinkPlayer(_options.MicDeviceId, _options.MicDeviceName);
+            _transport.UplinkSink = _micPlayer;
+            try
+            {
+                _micPlayer.Start();
+                if (_micPlayer.FatalError is { Length: > 0 } micError)
+                {
+                    Log($"上行播放启动失败：{micError}");
+                }
+                else
+                {
+                    Log($"上行播放已启动：{_micPlayer.DeviceName}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("上行播放启动失败（下行不受影响）: " + ex.Message);
+            }
+        }
 
         // 保活流要先于环回抓取启动：路径 B 是“只要有一个应用请求小缓冲，引擎就按它传输”，
         // 所以必须先有这个客户端在，再把环回流的引擎周期带下来。
@@ -193,6 +228,9 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
 
         _keepAlive?.Dispose();
         _keepAlive = null;
+
+        _micPlayer?.Dispose();
+        _micPlayer = null;
 
         if (_transport is not null)
         {
@@ -307,6 +345,14 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             Candidates = _candidates.Select(c => c.ToString()).ToList(),
             Phone = report,
             SecondsSincePhoneReport = reportTicks == 0 ? double.MaxValue : (Stopwatch.GetTimestamp() - reportTicks) / (double)Stopwatch.Frequency,
+            MicEnabled = _micPlayer is not null,
+            MicDeviceName = _micPlayer?.DeviceName ?? "-",
+            MicError = _micPlayer?.FatalError,
+            MicPackets = _micPlayer?.PacketsReceived ?? 0,
+            MicWaterMs = _micPlayer?.WaterMs ?? 0,
+            MicRatio = _micPlayer?.Ratio ?? 1.0,
+            MicUnderruns = _micPlayer?.Underruns ?? 0,
+            MicDrops = _micPlayer?.Drops ?? 0,
         };
     }
 
@@ -702,4 +748,12 @@ public sealed class EchoLinkOptions
     public int ProbeTimeoutMs { get; set; } = 1200;
 
     public string? WavDumpPath { get; set; }
+
+    /// <summary>启用上行：把手机麦克风播放到本机一个录音端点（虚拟麦克风）。</summary>
+    public bool EnableMic { get; set; }
+
+    /// <summary>上行渲染目标端点 ID（通常是 VB-Cable 的 CABLE Input）。</summary>
+    public string? MicDeviceId { get; set; }
+
+    public string MicDeviceName { get; set; } = "（未选择虚拟麦克风）";
 }
