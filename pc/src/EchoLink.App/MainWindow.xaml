@@ -10,7 +10,7 @@
         xmlns:controls="clr-namespace:EchoLink.App.Controls"
         xmlns:vm="clr-namespace:EchoLink.App.ViewModels"
         Title="EchoLink · PC 发送端"
-        Width="1140" Height="1000" MinWidth="1040" MinHeight="820"
+        Width="1180" Height="820" MinWidth="1080" MinHeight="640"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource AppBackground}"
         FontFamily="{materialDesign:MaterialDesignFont}"
@@ -26,8 +26,8 @@
     <Grid Margin="16" FocusManager.FocusedElement="{Binding ElementName=StartButton}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- ============================================================ 顶栏 -->
@@ -68,31 +68,7 @@
                         <TextBlock Text="{Binding LinkDescription}"
                                    Style="{StaticResource AppSubtitle}"
                                    Margin="10,0,0,0" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="330" />
-
-                        <!-- 版本自检：有新版本时是可点的下载链接，否则只显示检查结果 -->
-                        <Button Content="{Binding UpdateStatusText}"
-                                Command="{Binding CheckUpdateCommand}"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="8,0"
-                                Margin="6,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Opacity="0.55"
-                                Visibility="{Binding HasNoUpdate, Converter={StaticResource BoolToVisibility}}" />
-
-                        <Button Content="{Binding UpdateLinkText}"
-                                Command="{Binding OpenDownloadCommand}"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="8,0"
-                                Margin="6,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11.5"
-                                FontWeight="SemiBold"
-                                Foreground="{StaticResource BrandGreen}"
-                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibility}}" />
+                                   TextTrimming="CharacterEllipsis" MaxWidth="420" />
                     </StackPanel>
                 </StackPanel>
 
@@ -111,8 +87,73 @@
             </Grid>
         </Border>
 
+        <!-- ============================================================ 导航 -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+        <ListBox Grid.Column="0" Margin="0,0,0,12"
+                 Background="Transparent" BorderThickness="0"
+                 HorizontalAlignment="Left"
+                 SelectedIndex="{Binding SelectedPageIndex}">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Margin" Value="0,0,8,0" />
+                    <Setter Property="Padding" Value="20,8" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Border x:Name="Bg" CornerRadius="9" Background="Transparent"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter x:Name="Cp"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandGreen}" />
+                                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="White" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBoxItem Content="主控" />
+            <ListBoxItem Content="高级" />
+            <ListBoxItem Content="日志" />
+        </ListBox>
+
+            <!-- 版本与更新提示：放导航行右侧，不再和状态文字挤在一起 -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="{Binding UpdateStatusText}"
+                        Command="{Binding CheckUpdateCommand}"
+                        Background="Transparent" BorderThickness="0" Padding="10,4"
+                        FontSize="11" Opacity="0.8"
+                        Visibility="{Binding HasNoUpdate, Converter={StaticResource BoolToVisibility}}" />
+                <Button Content="{Binding UpdateLinkText}"
+                        Command="{Binding OpenDownloadCommand}"
+                        Background="Transparent" BorderThickness="0" Padding="10,4"
+                        FontSize="11.5" FontWeight="SemiBold"
+                        Foreground="{StaticResource BrandGreen}"
+                        Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </Grid>
+
         <!-- ============================================================ 主体 -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0"
+                      Visibility="{Binding IsContentPage, Converter={StaticResource BoolToVisibility}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="430" />
@@ -123,7 +164,8 @@
                 <StackPanel Grid.Column="0" Margin="0,0,12,0">
 
                     <!-- 输出设备 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="输出设备" Style="{StaticResource SectionTitle}" />
 
@@ -150,7 +192,8 @@
                     </Border>
 
                     <!-- 引擎选项 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="引擎选项" Style="{StaticResource SectionTitle}" />
 
@@ -168,56 +211,10 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 上行麦克风 -->
-                    <Border Style="{StaticResource CardPanel}">
-                        <StackPanel>
-                            <TextBlock Text="上行麦克风" Style="{StaticResource SectionTitle}" />
-
-                            <CheckBox Content="把手机麦克风当本机麦克风（自动配置）"
-                                      IsChecked="{Binding EnableMic}"
-                                      Margin="0,0,0,6" />
-
-                            <!-- 自动配置的结果：用了哪个渲染端点、会议软件该选谁 -->
-                            <TextBlock Text="{Binding MicRoutingText}"
-                                       Style="{StaticResource AppSubtitle}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,6" />
-
-                            <!-- 没找到虚拟声卡：给安装入口 + 重扫 -->
-                            <StackPanel Visibility="{Binding HasNoVirtualMic, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Text="虚拟麦克风必须是内核驱动，Windows 不允许应用运行时创建，所以需要装一个虚拟声卡（免费，装完重启一次）。"
-                                           Style="{StaticResource AppSubtitle}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <Button Content="安装虚拟声卡"
-                                            Command="{Binding InstallVirtualAudioCommand}"
-                                            Margin="0,0,8,0" />
-                                    <Button Content="重新扫描"
-                                            Command="{Binding RescanMicCommand}" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <!-- 有虚拟声卡：下拉只作为高级覆盖，默认已经自动选好 -->
-                            <ComboBox ItemsSource="{Binding Devices}"
-                                      SelectedItem="{Binding SelectedMicDevice}"
-                                      DisplayMemberPath="DisplayName"
-                                      Margin="0,0,0,6"
-                                      materialDesign:HintAssist.Hint="高级：手动指定渲染端点" />
-
-                            <controls:MetricRow Label="上行状态" Value="{Binding MicStatusText}" />
-                            <controls:MetricRow Label="上行水位 / 包数" Value="{Binding MicWaterText}" />
-
-                            <TextBlock Text="{Binding MicPhoneHintText}"
-                                       TextWrapping="Wrap"
-                                       Foreground="{StaticResource BrandGreen}"
-                                       FontSize="11"
-                                       Margin="0,4,0,0" />
-                        </StackPanel>
-                    </Border>
-
+                    <!-- 上行麦克风卡片已暂时移除（FeatureFlags.MicUplink = false） -->
                     <!-- 手机地址 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="手机地址" Style="{StaticResource SectionTitle}" />
 
@@ -291,7 +288,8 @@
                 <StackPanel Grid.Column="1">
 
                     <!-- 实时状态 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="实时状态" Style="{StaticResource SectionTitle}" />
 
@@ -331,7 +329,8 @@
                     </Border>
 
                     <!-- 手机回报 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="手机回报" Style="{StaticResource SectionTitle}" />
 
@@ -395,7 +394,8 @@
                     </Border>
 
                     <!-- 诊断 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="诊断" Style="{StaticResource SectionTitle}" />
 
@@ -429,7 +429,8 @@
                     </Border>
 
                     <!-- 提示 -->
-                    <Border Style="{StaticResource CardPanel}">
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="使用提示" Style="{StaticResource SectionTitle}" />
                             <TextBlock Style="{StaticResource AppSubtitle}" TextWrapping="Wrap" LineHeight="19">
@@ -446,7 +447,8 @@
         </ScrollViewer>
 
         <!-- ============================================================ 日志 -->
-        <Border Grid.Row="2" Style="{StaticResource CardPanelTight}" Height="140">
+        <Border Grid.Row="2" Style="{StaticResource CardPanelTight}"
+                Visibility="{Binding IsLogPage, Converter={StaticResource BoolToVisibility}}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

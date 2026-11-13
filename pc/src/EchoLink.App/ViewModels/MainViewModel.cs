@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using EchoLink.Core;
 using EchoLink.Core.Audio;
 using EchoLink.Core.Engine;
 using EchoLink.Core.Protocol;
@@ -344,6 +345,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _updateLinkText, value);
     }
 
+    // ==================================================================== 导航
+
+    /// <summary>0 = 主控，1 = 高级，2 = 日志。</summary>
+    public int SelectedPageIndex
+    {
+        get => _selectedPageIndex;
+        set
+        {
+            if (!Set(ref _selectedPageIndex, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(IsHomePage));
+            OnPropertyChanged(nameof(IsAdvancedPage));
+            OnPropertyChanged(nameof(IsLogPage));
+            OnPropertyChanged(nameof(IsContentPage));
+        }
+    }
+
+    public bool IsHomePage => _selectedPageIndex == 0;
+
+    public bool IsAdvancedPage => _selectedPageIndex == 1;
+
+    public bool IsLogPage => _selectedPageIndex == 2;
+
+    /// <summary>日志页占满整块区域，此时隐藏两栏主体。</summary>
+    public bool IsContentPage => _selectedPageIndex != 2;
+
     public bool HasUpdate
     {
         get => _hasUpdate;
@@ -676,6 +706,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _updateStatusText = string.Empty;
     private string _updateLinkText = string.Empty;
     private bool _hasUpdate;
+    private int _selectedPageIndex;
 
     /// <summary>版本号（来自 Directory.Build.props 的 &lt;Version&gt;），显示在标题右侧便于排查版本不符。</summary>
     public string AppVersionText { get; } = "v" + MainViewModel.LocalVersion;
@@ -1066,7 +1097,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             : _manualTarget.Trim(),
         ProbeTimeoutMs = 1200,
         WavDumpPath = _wavDumpEnabled && !string.IsNullOrWhiteSpace(_wavDumpPath) ? _wavDumpPath : null,
-        EnableMic = _enableMic,
+        // 上行麦克风暂时关闭（见 FeatureFlags）：界面已隐藏，这里再兜一道
+        EnableMic = FeatureFlags.MicUplink && _enableMic,
         MicDeviceId = _selectedMicDevice?.Id,
         MicDeviceName = _selectedMicDevice?.Name ?? "（未选择虚拟麦克风）",
     };

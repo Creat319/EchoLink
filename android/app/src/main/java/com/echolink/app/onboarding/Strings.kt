@@ -74,6 +74,9 @@ interface Strings {
     val sectionMic: String
     val sectionLog: String
     val settingsReplayGuide: String
+    val tabHome: String
+    val tabSettings: String
+    val tabLog: String
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +140,9 @@ object ZhCn : Strings {
     override val sectionMic = "上行麦克风"
     override val sectionLog = "日志"
     override val settingsReplayGuide = "重新查看引导"
+    override val tabHome = "连接"
+    override val tabSettings = "设置"
+    override val tabLog = "日志"
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +206,9 @@ object ZhTw : Strings {
     override val sectionMic = "上行麥克風"
     override val sectionLog = "日誌"
     override val settingsReplayGuide = "重新查看引導"
+    override val tabHome = "連線"
+    override val tabSettings = "設定"
+    override val tabLog = "日誌"
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +272,9 @@ object Ja : Strings {
     override val sectionMic = "マイク送信"
     override val sectionLog = "ログ"
     override val settingsReplayGuide = "ガイドをもう一度見る"
+    override val tabHome = "接続"
+    override val tabSettings = "設定"
+    override val tabLog = "ログ"
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +338,9 @@ object En : Strings {
     override val sectionMic = "Uplink microphone"
     override val sectionLog = "Log"
     override val settingsReplayGuide = "Show the guide again"
+    override val tabHome = "Connection"
+    override val tabSettings = "Settings"
+    override val tabLog = "Log"
 }
 
 fun stringsFor(language: AppLanguage): Strings = when (language) {

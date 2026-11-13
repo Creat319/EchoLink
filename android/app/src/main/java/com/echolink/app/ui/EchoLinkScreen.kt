@@ -14,6 +14,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +53,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.echolink.app.LinkPhase
+import com.echolink.app.FeatureFlags
 import com.echolink.app.ReceiverSettings
 import com.echolink.app.ReceiverState
 import java.util.Locale
@@ -116,60 +125,155 @@ fun EchoLinkApp(
 ) {
     val strings = remember(state.settings.language) { stringsFor(state.settings.language) }
 
+    // 底部导航：连接 / 设置 / 日志。之前所有卡片堆在一页、要滚很久，信息密度也太高。
+    var tab by rememberSaveable { mutableStateOf(0) }
+
     CompositionLocalProvider(LocalStrings provides strings) {
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text("EchoLink · ${strings.appTitle}", style = MaterialTheme.typography.titleMedium) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("EchoLink", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = strings.appTitle + " · " + state.statusText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
+                )
+            },
+            bottomBar = {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    NavigationBarItem(
+                        selected = tab == 0,
+                        onClick = { tab = 0 },
+                        icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                        label = { Text(strings.tabHome) },
+                    )
+                    NavigationBarItem(
+                        selected = tab == 1,
+                        onClick = { tab = 1 },
+                        icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                        label = { Text(strings.tabSettings) },
+                    )
+                    NavigationBarItem(
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                        label = { Text(strings.tabLog) },
+                    )
+                }
+            },
+        ) { padding ->
+            when (tab) {
+                0 -> HomeTab(
+                    modifier = Modifier.padding(padding),
+                    state = state,
+                    onStart = onStart,
+                    onStop = onStop,
+                    onTestBeep = onTestBeep,
+                    onConfirmBeep = onConfirmBeep,
+                    onReopen = onReopen,
+                )
+
+                1 -> SettingsTab(
+                    modifier = Modifier.padding(padding),
+                    state = state,
+                    onSettingsChange = onSettingsChange,
+                    onReplayGuide = onReplayGuide,
+                    onCheckUpdate = onCheckUpdate,
+                    onOpenDownload = onOpenDownload,
+                )
+
+                else -> LogTab(modifier = Modifier.padding(padding), state = state)
+            }
+        }
+
+        // 弹窗挂在 Scaffold 外面：它不参与滚动，检测到就浮在最上层
+        if (updateDialogVersion != null) {
+            UpdateAvailableDialog(
+                version = updateDialogVersion,
+                onDownload = {
+                    onDismissUpdateDialog()
+                    onOpenDownload()
+                },
+                onLater = onDismissUpdateDialog,
+                onSkipVersion = onSkipUpdateVersion,
             )
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item { HeaderCard(state, onStart, onStop, onTestBeep, onReopen) }
-
-            if (state.beepPromptVisible) {
-                item { BeepConfirmCard(onConfirmBeep) }
-            }
-
-            item { WaterCard(state) }
-            item { StreamCard(state) }
-            item { NetworkCard(state) }
-            item { StabilityCard(state) }
-
-            if (state.paramWarnings.isNotEmpty()) {
-                item { WarningCard(state) }
-            }
-
-            item { AddressCard(state) }
-            item { SettingsCard(state, onSettingsChange, onReplayGuide) }
-            item { UpdateCard(state, onCheckUpdate, onOpenDownload) }
-            item { LogCard(state) }
         }
     }
+}
 
-    // 弹窗挂在 Scaffold 外面：它不参与滚动，检测到就浮在最上层
-    if (updateDialogVersion != null) {
-        UpdateAvailableDialog(
-            version = updateDialogVersion,
-            onDownload = {
-                onDismissUpdateDialog()
-                onOpenDownload()
-            },
-            onLater = onDismissUpdateDialog,
-            onSkipVersion = onSkipUpdateVersion,
-        )
+/** 连接：状态、水位、播放链路、网络、稳定性。 */
+@Composable
+private fun HomeTab(
+    modifier: Modifier,
+    state: ReceiverState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onTestBeep: () -> Unit,
+    onConfirmBeep: (Boolean) -> Unit,
+    onReopen: () -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item { HeaderCard(state, onStart, onStop, onTestBeep, onReopen) }
+
+        if (state.beepPromptVisible) {
+            item { BeepConfirmCard(onConfirmBeep) }
+        }
+
+        item { WaterCard(state) }
+        item { StreamCard(state) }
+        item { NetworkCard(state) }
+        item { StabilityCard(state) }
+
+        if (state.paramWarnings.isNotEmpty()) {
+            item { WarningCard(state) }
+        }
     }
+}
+
+/** 设置：地址、端口与各项开关、版本。 */
+@Composable
+private fun SettingsTab(
+    modifier: Modifier,
+    state: ReceiverState,
+    onSettingsChange: (ReceiverSettings) -> Unit,
+    onReplayGuide: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onOpenDownload: () -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item { AddressCard(state) }
+        item { SettingsCard(state, onSettingsChange, onReplayGuide) }
+        item { UpdateCard(state, onCheckUpdate, onOpenDownload) }
+    }
+}
+
+/** 日志：单独一页，别和指标抢地方。 */
+@Composable
+private fun LogTab(modifier: Modifier, state: ReceiverState) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item { LogCard(state) }
     }
 }
 
@@ -471,35 +575,38 @@ private fun SettingsCard(
     }
 
     SectionCard(title = LocalStrings.current.sectionSettings, accent = MaterialTheme.colorScheme.outline) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(LocalStrings.current.sectionMic, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    text = "需要重启接收才生效；PC 端要选虚拟麦克风（如 CABLE Input）",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // 上行麦克风暂时关闭（见 FeatureFlags），整块不显示；代码保留，开关打开后回来。
+        if (FeatureFlags.MicUplink) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(LocalStrings.current.sectionMic, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = "需要重启接收才生效；PC 端要选虚拟麦克风（如 CABLE Input）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Switch(
+                    checked = state.settings.micEnabled,
+                    onCheckedChange = { onSettingsChange(state.settings.copy(micEnabled = it)) },
                 )
             }
 
-            Switch(
-                checked = state.settings.micEnabled,
-                onCheckedChange = { onSettingsChange(state.settings.copy(micEnabled = it)) },
-            )
-        }
-
-        if (state.micRunning) {
-            MetricRow("上行已发送", "${state.micPackets} 包", hint = state.micSource)
-            MetricRow(
-                "上行电平",
-                String.format(Locale.US, "%.3f", state.micPeak),
-                hint = if (state.micDuckGain < 1.0f) "已压低 20 dB" else "正常",
-            )
-        } else if (state.settings.micEnabled && state.isRunning) {
-            Text(
-                text = "上行麦克风未运行：${state.micError ?: "等待授权或端口"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            if (state.micRunning) {
+                MetricRow("上行已发送", "${state.micPackets} 包", hint = state.micSource)
+                MetricRow(
+                    "上行电平",
+                    String.format(Locale.US, "%.3f", state.micPeak),
+                    hint = if (state.micDuckGain < 1.0f) "已压低 20 dB" else "正常",
+                )
+            } else if (state.settings.micEnabled && state.isRunning) {
+                Text(
+                    text = "上行麦克风未运行：${state.micError ?: "等待授权或端口"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
                     onStart = {
                         requestNotificationPermissionIfNeeded()
                         // 先要权限再起服务：服务声明的类型必须与权限一致（Android 14）
-                        if (needsMicPermission()) {
+                        if (FeatureFlags.MicUplink && needsMicPermission()) {
                             pendingStart = true
                             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         } else {

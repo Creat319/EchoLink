@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import com.echolink.app.EchoLinkStateHolder
 import com.echolink.app.LinkPhase
+import com.echolink.app.FeatureFlags
 import com.echolink.app.ReceiverSettings
 import com.echolink.app.ReceiverState
 import com.echolink.app.net.NetworkSnapshot
@@ -589,6 +590,11 @@ class AudioEngineController(
      * 谁给我发音频我就发给谁。
      */
     private fun startMic() {
+        // 上行麦克风暂时关闭（见 FeatureFlags）：不开采集、不发上行包
+        if (!FeatureFlags.MicUplink) {
+            return
+        }
+
         if (micUplink != null) {
             return
         }
