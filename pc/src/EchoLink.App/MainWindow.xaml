@@ -173,22 +173,46 @@
                         <StackPanel>
                             <TextBlock Text="上行麦克风" Style="{StaticResource SectionTitle}" />
 
-                            <CheckBox Content="把手机麦克风当本机麦克风"
+                            <CheckBox Content="把手机麦克风当本机麦克风（自动配置）"
                                       IsChecked="{Binding EnableMic}"
                                       Margin="0,0,0,6" />
 
-                            <ComboBox ItemsSource="{Binding Devices}"
-                                      SelectedItem="{Binding SelectedMicDevice}"
-                                      DisplayMemberPath="DisplayName"
-                                      Margin="0,0,0,6" />
-
-                            <TextBlock Text="渲染到虚拟声卡的输入端（如 VB-Cable 的 CABLE Input），会议软件再选它的输出端当麦克风。"
+                            <!-- 自动配置的结果：用了哪个渲染端点、会议软件该选谁 -->
+                            <TextBlock Text="{Binding MicRoutingText}"
                                        Style="{StaticResource AppSubtitle}"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,6" />
 
+                            <!-- 没找到虚拟声卡：给安装入口 + 重扫 -->
+                            <StackPanel Visibility="{Binding HasNoVirtualMic, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="虚拟麦克风必须是内核驱动，Windows 不允许应用运行时创建，所以需要装一个虚拟声卡（免费，装完重启一次）。"
+                                           Style="{StaticResource AppSubtitle}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <Button Content="安装虚拟声卡"
+                                            Command="{Binding InstallVirtualAudioCommand}"
+                                            Margin="0,0,8,0" />
+                                    <Button Content="重新扫描"
+                                            Command="{Binding RescanMicCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- 有虚拟声卡：下拉只作为高级覆盖，默认已经自动选好 -->
+                            <ComboBox ItemsSource="{Binding Devices}"
+                                      SelectedItem="{Binding SelectedMicDevice}"
+                                      DisplayMemberPath="DisplayName"
+                                      Margin="0,0,0,6"
+                                      materialDesign:HintAssist.Hint="高级：手动指定渲染端点" />
+
                             <controls:MetricRow Label="上行状态" Value="{Binding MicStatusText}" />
                             <controls:MetricRow Label="上行水位 / 包数" Value="{Binding MicWaterText}" />
+
+                            <TextBlock Text="{Binding MicPhoneHintText}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource BrandGreen}"
+                                       FontSize="11"
+                                       Margin="0,4,0,0" />
                         </StackPanel>
                     </Border>
 

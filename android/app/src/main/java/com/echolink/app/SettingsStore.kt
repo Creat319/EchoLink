@@ -14,7 +14,7 @@ class SettingsStore(context: Context) {
         autoTargetWater = prefs.getBoolean(KEY_AUTO_TARGET, true),
         manualTargetWaterMs = prefs.getInt(KEY_MANUAL_TARGET, 30),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
-        micEnabled = prefs.getBoolean(KEY_MIC_ENABLED, false),
+        micEnabled = prefs.getBoolean(KEY_MIC_ENABLED, true),
     )
 
     fun save(settings: ReceiverSettings) {

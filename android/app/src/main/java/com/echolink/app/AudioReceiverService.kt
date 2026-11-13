@@ -82,9 +82,15 @@ class AudioReceiverService : Service() {
     private fun startInForeground() {
         val notification = buildNotification(EchoLinkStateHolder.state.value)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // 开麦克风时必须声明 microphone 类型，否则 Android 14 会直接抛异常；
-            // mediaPlayback 一直保留，因为下行播放同时在跑。
-            val types = if (EchoLinkStateHolder.liveSettings.micEnabled) {
+            // 开麦克风时必须声明 microphone 类型。但**权限没授予时不能声明**：
+            // Android 14 会因为"声明了类型却没有对应权限"直接抛 SecurityException。
+            // 所以这里以"权限已授予"为条件，而不是以"开关打开"为条件。
+            val micGranted = ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            val types = if (EchoLinkStateHolder.liveSettings.micEnabled && micGranted) {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             } else {

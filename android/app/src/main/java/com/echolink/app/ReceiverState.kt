@@ -22,7 +22,9 @@ data class ReceiverSettings(
     val keepScreenOn: Boolean = false,
 
     /** 上行麦克风：把手机麦克风发回 PC 当麦克风用。 */
-    val micEnabled: Boolean = false,
+    // 默认开启：装了本应用就是要用它当麦克风，且权限会在首次启动时弹窗询问。
+    // 不想要的人关一次即可（会持久化）。
+    val micEnabled: Boolean = true,
 )
 
 /** UI 唯一的状态源。由 AudioEngineController 覆盖写，Activity 只读。 */

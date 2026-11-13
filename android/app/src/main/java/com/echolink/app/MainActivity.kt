@@ -26,16 +26,31 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var settingsStore: SettingsStore
 
+    /** 用户点了「开始接收」，正在等麦克风权限的结果。 */
+    private var pendingStart = false
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* 拒绝也能跑，只是没有通知 */ }
 
+    /**
+     * 麦克风权限要在**启动前台服务之前**拿到：Android 14 下服务声明的
+     * foregroundServiceType 必须与实际持有的权限一致，否则 startForeground 直接抛异常。
+     * 所以这里"先要权限、拿到再启动服务"。
+     */
     private val micPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val shouldStart = pendingStart
+            pendingStart = false
+
             if (!granted) {
-                // 拒绝时把开关关掉，避免 UI 显示"已开启"但实际没有上行
-                EchoLinkStateHolder.updateSettings(
-                    EchoLinkStateHolder.liveSettings.copy(micEnabled = false),
-                )
+                // 拒绝：关掉开关（避免 UI 显示已开启但没有上行），下行照常工作
+                val disabled = EchoLinkStateHolder.liveSettings.copy(micEnabled = false)
+                settingsStore.save(disabled)
+                EchoLinkStateHolder.updateSettings(disabled)
+            }
+
+            if (shouldStart) {
+                AudioReceiverService.start(this)
             }
         }
 
@@ -66,8 +81,13 @@ class MainActivity : ComponentActivity() {
                     state = state,
                     onStart = {
                         requestNotificationPermissionIfNeeded()
-                        requestMicPermissionIfNeeded()
-                        AudioReceiverService.start(this)
+                        // 先要权限再起服务：服务声明的类型必须与权限一致（Android 14）
+                        if (needsMicPermission()) {
+                            pendingStart = true
+                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            AudioReceiverService.start(this)
+                        }
                     },
                     onStop = { AudioReceiverService.stop(this) },
                     onTestBeep = { AudioReceiverService.testBeep(this) },
@@ -125,22 +145,19 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 上行麦克风需要 RECORD_AUDIO。必须在 Activity 可见时请求：
-     * 前台服务在后台自行申请麦克风会被直接拒绝。
+     * 是否需要（且能够）请求录音权限。
+     * 由开关打开 + 尚未授予两个条件决定；已永久拒绝时 requestPermission 会立刻回调，
+     * 不会卡住启动流程。
      */
-    private fun requestMicPermissionIfNeeded() {
+    private fun needsMicPermission(): Boolean {
         if (!EchoLinkStateHolder.liveSettings.micEnabled) {
-            return
+            return false
         }
 
-        val granted = ContextCompat.checkSelfPermission(
+        return ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.RECORD_AUDIO,
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!granted) {
-            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        ) != PackageManager.PERMISSION_GRANTED
     }
 
     private fun requestNotificationPermissionIfNeeded() {

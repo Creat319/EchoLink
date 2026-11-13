@@ -29,6 +29,7 @@ internal static class Program
             return command switch
             {
                 "devices" => ListDevices(),
+                "micdevices" => ListMicDevices(),
                 "periods" => ListPeriods(),
                 "targets" => ListTargets(),
                 "capture" => CaptureAndDump(options),
@@ -94,8 +95,40 @@ internal static class Program
     private static int OptionInt(Dictionary<string, string> options, string key, int fallback)
         => options.TryGetValue(key, out var value) && int.TryParse(value, out var parsed) ? parsed : fallback;
 
-    private static int ListDevices()
+    /// <summary>
+    /// 列出虚拟麦克风候选（PC 端"一键自动配置"用的就是同一套判据）。
+    /// 排查"为什么没识别到虚拟声卡"时先跑这个。
+    /// </summary>
+    private static int ListMicDevices()
     {
+        var candidates = Core.Audio.VirtualMicLocator.Locate();
+        if (candidates.Count == 0)
+        {
+            Console.WriteLine("未找到任何虚拟麦克风候选。");
+            Console.WriteLine("虚拟麦克风必须是内核驱动（Windows 没有用户态驱动框架），请安装 VB-Cable：https://vb-audio.com/Cable/");
+            return 1;
+        }
+
+        Console.WriteLine($"虚拟麦克风候选（{candidates.Count} 个，按优先级排序）：");
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            Console.WriteLine($"  {i + 1}. {c.RenderName}");
+            Console.WriteLine($"     渲染端点：{c.RenderId}");
+            Console.WriteLine($"     配对录音：{c.CaptureName ?? "（无 —— 会议软件录不到，不可用）"}");
+            Console.WriteLine($"     评分 {c.Score}  原因：{c.Reason}" +
+                              (c.IsDefaultCapture ? "  它已是系统默认麦克风" : string.Empty));
+        }
+
+        var best = candidates.FirstOrDefault(c => c.Usable);
+        Console.WriteLine();
+        Console.WriteLine(best is null
+            ? "自动配置会失败：没有任何候选带配对录音端点。"
+            : $"自动会选：{best.RenderName} → 会议软件请选 {best.CaptureName}");
+        return best is null ? 1 : 0;
+    }
+
+    private static int ListDevices()    {
         using var enumerator = new MMDeviceEnumerator();
         string? defaultId = null;
         try

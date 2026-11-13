@@ -26,3 +26,7 @@ xcp/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 本地打包产物（上传到 el.carovo.shop 用，253 MB，不进仓库）
+/EchoLink.zip
+*.zip

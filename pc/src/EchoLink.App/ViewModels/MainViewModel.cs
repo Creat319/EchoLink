@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using EchoLink.Core.Audio;
 using EchoLink.Core.Engine;
 using EchoLink.Core.Protocol;
 using EchoLink.Core.Transport;
@@ -59,6 +60,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private DeviceItem? _selectedMicDevice;
     private string _micStatusText = "未启用";
     private string _micWaterText = "-";
+    private bool _hasVirtualMic;
+    private string _micRoutingText = string.Empty;
+    private string _micPhoneHintText = string.Empty;
+    private DateTime? _micZeroSince;
+    private DispatcherTimer? _micRescanTimer;
+    private int _micRescanCount;
 
     // ---------------- 运行时状态 ----------------
     private bool _isRunning;
@@ -115,11 +122,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BrowseWavCommand = new RelayCommand(BrowseWav);
         ToggleCandidatesCommand = new RelayCommand(() => ShowCandidates = !ShowCandidates);
         CheckUpdateCommand = new RelayCommand(() => _ = CheckUpdatesAsync());
+        InstallVirtualAudioCommand = new RelayCommand(OpenVirtualAudioDownload);
+        RescanMicCommand = new RelayCommand(ConfigureMic);
         OpenDownloadCommand = new RelayCommand(OpenDownloadPage);
 
         ApplySettingsToState();
         RefreshDevices();
         RescanCandidates();
+
+        // 上次退出时麦克风是开着的：启动就自动配好，不用用户再点
+        if (_enableMic)
+        {
+            ConfigureMic();
+        }
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
         _timer.Tick += (_, _) => RefreshSnapshot();
@@ -131,7 +146,115 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CheckUpdateCommand { get; }
 
+    /// <summary>打开 VB-Cable 下载页（虚拟麦克风必须靠驱动，应用装不了）。</summary>
+    public RelayCommand InstallVirtualAudioCommand { get; }
+
+    /// <summary>重新扫描虚拟声卡。</summary>
+    public RelayCommand RescanMicCommand { get; }
+
     public RelayCommand OpenDownloadCommand { get; }
+
+    private const string VirtualAudioDownloadUrl = "https://vb-audio.com/Cable/";
+
+    /// <summary>
+    /// 自动配置虚拟麦克风。
+    ///
+    /// 只能"找出已装的驱动并配对"，不能运行时创建：Windows 没有用户态音频驱动框架，
+    /// 虚拟麦克风只能是内核驱动。找不到时启动一轮重扫（装完驱动不用重启程序），
+    /// 同时给出下载入口。
+    /// </summary>
+    private void ConfigureMic()
+    {
+        var best = VirtualMicLocator.LocateBest();
+
+        if (best is null || !best.Usable)
+        {
+            HasVirtualMic = false;
+            SelectedMicDevice = null;
+            MicRoutingText = best is null
+                ? "未找到虚拟声卡。虚拟麦克风需要安装驱动（Windows 不允许应用运行时创建），" +
+                  "点「安装虚拟声卡」装上 VB-Cable，装好后会自动识别。"
+                : $"找到「{best.RenderName}」但没有配对的录音端点，会议软件录不到它。请安装 VB-Cable。";
+
+            StartMicRescan();
+            return;
+        }
+
+        HasVirtualMic = true;
+        StopMicRescan();
+
+        var match = Devices.FirstOrDefault(d => d.Id == best.RenderId);
+        if (match is not null)
+        {
+            SelectedMicDevice = match;
+        }
+
+        MicRoutingText =
+            $"已自动选用：{best.RenderName}\r\n" +
+            $"会议软件里把麦克风选成：{best.CaptureName}" +
+            (best.IsDefaultCapture ? "（它已是系统默认麦克风）" : string.Empty);
+
+        AppendLog($"[麦克风] 自动配置：{best.RenderName} → {best.CaptureName}（{best.Reason}）");
+    }
+
+    /// <summary>
+    /// 装完驱动后自动重扫，最多等 1 分钟（每 3 秒一次）。
+    /// 设备枚举不开流、不探测周期，代价很低。
+    /// </summary>
+    private void StartMicRescan()
+    {
+        if (_micRescanTimer is not null)
+        {
+            return;
+        }
+
+        _micRescanCount = 0;
+        _micRescanTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+
+        _micRescanTimer.Tick += (_, _) =>
+        {
+            _micRescanCount++;
+            if (!_enableMic || _micRescanCount > 20)
+            {
+                StopMicRescan();
+                return;
+            }
+
+            var best = VirtualMicLocator.LocateBest();
+            if (best is { Usable: true })
+            {
+                AppendLog("[麦克风] 检测到新装的虚拟声卡，自动配置");
+                ConfigureMic();
+            }
+        };
+
+        _micRescanTimer.Start();
+    }
+
+    private void StopMicRescan()
+    {
+        _micRescanTimer?.Stop();
+        _micRescanTimer = null;
+    }
+
+    private void OpenVirtualAudioDownload()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(VirtualAudioDownloadUrl)
+            {
+                UseShellExecute = true,
+            });
+            AppendLog("[麦克风] 已打开 VB-Cable 下载页：" + VirtualAudioDownloadUrl);
+        }
+        catch (Exception ex)
+        {
+            AppendLog("[麦克风] 打开下载页失败：" + ex.Message);
+        }
+    }
 
     /// <summary>
     /// 版本自检。**只提示 + 打开下载页**，不自动下载、不自动运行：
@@ -247,7 +370,53 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public bool EnableMic
     {
         get => _enableMic;
-        set => Set(ref _enableMic, value);
+        set
+        {
+            if (!Set(ref _enableMic, value))
+            {
+                return;
+            }
+
+            if (value)
+            {
+                // 一键自动配置：找到虚拟声卡对就选好，找不到就给出安装引导
+                ConfigureMic();
+            }
+            else
+            {
+                StopMicRescan();
+            }
+        }
+    }
+
+    /// <summary>本机是否找到了可用的虚拟麦克风（渲染侧 + 配对录音侧）。</summary>
+    public bool HasVirtualMic
+    {
+        get => _hasVirtualMic;
+        private set
+        {
+            if (Set(ref _hasVirtualMic, value))
+            {
+                OnPropertyChanged(nameof(HasNoVirtualMic));
+            }
+        }
+    }
+
+    /// <summary>没找到虚拟声卡时才显示安装引导。</summary>
+    public bool HasNoVirtualMic => !_hasVirtualMic;
+
+    /// <summary>自动配置结果：用了哪个渲染端点、会议软件该选哪个麦克风。</summary>
+    public string MicRoutingText
+    {
+        get => _micRoutingText;
+        private set => Set(ref _micRoutingText, value);
+    }
+
+    /// <summary>启用麦克风但一直没收到上行包时的提示（多半是手机端没开）。</summary>
+    public string MicPhoneHintText
+    {
+        get => _micPhoneHintText;
+        private set => Set(ref _micPhoneHintText, value);
     }
 
     public DeviceItem? SelectedMicDevice
@@ -1013,6 +1182,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             MicWaterText = snapshot.MicPackets > 0
                 ? $"{snapshot.MicWaterMs:F0} ms / {snapshot.MicPackets} 包"
                 : "-";
+
+            // 链路在跑、PC 侧也开了麦克风，但一直收不到上行包 —— 十有八九是手机端没开。
+            // 不提示的话用户会以为是 PC 这边没配好。
+            if (snapshot.MicPackets == 0 && phone is not null)
+            {
+                _micZeroSince ??= DateTime.UtcNow;
+                MicPhoneHintText = (DateTime.UtcNow - _micZeroSince.Value).TotalSeconds >= 5
+                    ? "手机端还没开始发上行音频：请在手机 App 的「设置」里打开「上行麦克风」，并允许录音权限。"
+                    : string.Empty;
+            }
+            else
+            {
+                _micZeroSince = null;
+                MicPhoneHintText = string.Empty;
+            }
         }
         if (phone is { } report)
         {
