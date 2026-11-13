@@ -33,21 +33,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.echolink.app.net.UsbTetherDetector
 import kotlinx.coroutines.delay
 
-private const val PageCount = 4
-private const val ConnectPageIndex = 3
+/** 语言 / 介绍 / 连接 —— 三页，够用就好。 */
+private const val PageWelcome = 0
+private const val PageIntro = 1
+private const val PageConnect = 2
+private const val PageCount = 3
+
+/** 超过这个时长还没检测到 USB，就给一个"手动继续"的出口。 */
+private const val ManualFallbackAfterMs = 10_000L
 
 /**
  * 首次启动的引导。
  *
- * 最后一页要求真实检测到 USB 网络共享才允许「下一步」——但**「跳过引导」始终可用**，
- * 避免用户卡死在里面（比如手机暂时没有可用的数据线）。
+ * 三个设计上的坑，都是踩过之后改的：
+ * - **不要**用 `verticalScroll` + `Arrangement.Center` + `fillMaxSize` 组合：
+ *   内容一旦超过一屏，居中会把顶部裁掉，表现为"只剩序号、文字不见了"。
+ *   现在一律顶对齐 + 滚动。
+ * - **不要**画页指示圆点：用户反馈"那三个点是什么鬼"，去掉了，靠文案和按钮表达进度。
+ * - 最后页要求真实检测到 USB，但**超时后给手动出口**、且「跳过引导」始终可用：
+ *   检测逻辑再准也会有认不出的机型，不能让用户被卡死在引导里。
  */
 @Composable
 fun OnboardingScreen(
@@ -59,45 +69,48 @@ fun OnboardingScreen(
     val strings = remember(language) { stringsFor(language) }
     val pagerState = rememberPagerState(initialPage = 0) { PageCount }
 
-    val context = LocalContext.current
     var usbConnected by remember { mutableStateOf(false) }
+    var interfaces by remember { mutableStateOf(emptyList<UsbTetherDetector.InterfaceInfo>()) }
+    var waitedMs by remember { mutableStateOf(0L) }
 
-    // 只在最后一页做轮询，避免没意义的常驻开销
+    // 只在最后一页轮询；离开就停
     LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage != ConnectPageIndex) {
+        if (pagerState.currentPage != PageConnect) {
             return@LaunchedEffect
         }
 
+        waitedMs = 0L
         while (true) {
-            usbConnected = UsbTetherDetector.isConnected(context)
+            usbConnected = UsbTetherDetector.isConnected()
+            interfaces = UsbTetherDetector.listInterfaces()
             delay(700)
+            if (!usbConnected) {
+                waitedMs += 700
+            }
         }
     }
 
-    val onLastPage = pagerState.currentPage == ConnectPageIndex
+    val manualFallback = !usbConnected && waitedMs >= ManualFallbackAfterMs
 
     Column(Modifier.fillMaxSize()) {
-        // 顶栏：跳过 + 页指示
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PageDots(count = PageCount, current = pagerState.currentPage)
-            Spacer(Modifier.weight(1f))
             TextButton(onClick = onFinish) {
-                Text(strings.skip, style = MaterialTheme.typography.bodyMedium)
+                Text(strings.skip)
             }
         }
 
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = true,
             modifier = Modifier.weight(1f),
         ) { page ->
             when (page) {
-                0 -> WelcomePage(
+                PageWelcome -> WelcomePage(
                     strings = strings,
                     selected = language,
                     onSelect = { picked ->
@@ -106,30 +119,20 @@ fun OnboardingScreen(
                     },
                 )
 
-                1 -> IntroPage(
-                    title = strings.intro1Title,
-                    body = strings.intro1Body,
-                    bullets = strings.intro1Bullets,
-                )
-
-                2 -> IntroPage(
-                    title = strings.intro2Title,
-                    body = strings.intro2Body,
-                    bullets = strings.intro2Bullets,
-                )
+                PageIntro -> IntroPage(strings)
 
                 else -> ConnectPage(
                     strings = strings,
                     connected = usbConnected,
+                    interfaces = interfaces,
                 )
             }
         }
 
-        // 底栏：上一步 / 下一步
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (pagerState.currentPage > 0) {
@@ -140,13 +143,15 @@ fun OnboardingScreen(
 
             Spacer(Modifier.weight(1f))
 
-            if (onLastPage) {
+            if (pagerState.currentPage == PageConnect) {
                 Button(
                     onClick = onFinish,
-                    // 没连上 USB 就不让走完流程——但右上角的「跳过引导」仍然可以点
-                    enabled = usbConnected,
+                    enabled = usbConnected || manualFallback,
                 ) {
-                    Text(strings.start)
+                    Text(
+                        if (manualFallback) strings.connectManualContinue else strings.start,
+                        maxLines = 1,
+                    )
                 }
             } else {
                 Button(onClick = { pagerState.requestScrollToPage(pagerState.currentPage + 1) }) {
@@ -157,36 +162,15 @@ fun OnboardingScreen(
     }
 }
 
+/** 所有页面的统一滚动容器：顶对齐，绝不居中裁内容。 */
 @Composable
-private fun PageDots(count: Int, current: Int) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        repeat(count) { index ->
-            val active = index == current
-            Box(
-                Modifier
-                    .padding(end = 6.dp)
-                    .size(if (active) 9.dp else 7.dp)
-                    .background(
-                        color = if (active) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant
-                        },
-                        shape = CircleShape,
-                    ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun PageScaffold(content: @Composable () -> Unit) {
+private fun ScrollPage(content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 22.dp)
+            .padding(top = 8.dp, bottom = 24.dp),
     ) {
         content()
     }
@@ -198,26 +182,32 @@ private fun PageTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface,
     )
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(10.dp))
+}
+
+@Composable
+private fun BodyText(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyLarge,
+        color = color,
+    )
 }
 
 @Composable
 private fun WelcomePage(strings: Strings, selected: AppLanguage, onSelect: (AppLanguage) -> Unit) {
-    PageScaffold {
+    ScrollPage {
         Text(
             text = strings.welcomeTitle,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Start,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = strings.welcomeBody,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(10.dp))
+        BodyText(strings.welcomeBody)
+        Spacer(Modifier.height(24.dp))
 
         Text(
             text = strings.languageTitle,
@@ -226,7 +216,6 @@ private fun WelcomePage(strings: Strings, selected: AppLanguage, onSelect: (AppL
         )
         Spacer(Modifier.height(10.dp))
 
-        // 四选一，选中即时生效（这一页的文案会跟着变，用户能立刻确认）
         AppLanguage.entries.forEach { language ->
             LanguageRow(
                 language = language,
@@ -279,41 +268,67 @@ private fun LanguageRow(language: AppLanguage, selected: Boolean, onClick: () ->
     }
 }
 
+/** 第 2 页：把原来两页介绍合成一页（用户反馈分成两页太啰嗦）。 */
 @Composable
-private fun IntroPage(title: String, body: String, bullets: List<String>) {
-    PageScaffold {
-        PageTitle(title)
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(20.dp))
+private fun IntroPage(strings: Strings) {
+    ScrollPage {
+        PageTitle(strings.intro1Title)
+        BodyText(strings.intro1Body)
 
-        bullets.forEach { bullet ->
-            Row(Modifier.padding(vertical = 6.dp)) {
-                Text(
-                    text = "•",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(text = bullet, style = MaterialTheme.typography.bodyMedium)
-            }
+        Spacer(Modifier.height(12.dp))
+        Bullets(strings.intro1Bullets)
+
+        Spacer(Modifier.height(22.dp))
+        HorizontalDividerLine()
+        Spacer(Modifier.height(22.dp))
+
+        PageTitle(strings.intro2Title)
+        BodyText(strings.intro2Body)
+
+        Spacer(Modifier.height(12.dp))
+        Bullets(strings.intro2Bullets)
+    }
+}
+
+@Composable
+private fun Bullets(items: List<String>) {
+    items.forEach { item ->
+        Row(Modifier.padding(vertical = 5.dp)) {
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = item,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
 @Composable
-private fun ConnectPage(strings: Strings, connected: Boolean) {
-    PageScaffold {
+private fun HorizontalDividerLine() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant),
+    )
+}
+
+@Composable
+private fun ConnectPage(
+    strings: Strings,
+    connected: Boolean,
+    interfaces: List<UsbTetherDetector.InterfaceInfo>,
+) {
+    ScrollPage {
         PageTitle(strings.connectTitle)
-        Text(
-            text = strings.connectBody,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(16.dp))
+        BodyText(strings.connectBody)
+        Spacer(Modifier.height(14.dp))
 
         // 给"不知道 USB 线是什么"的人一句人话
         Card(
@@ -329,24 +344,44 @@ private fun ConnectPage(strings: Strings, connected: Boolean) {
             )
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
 
+        // 步骤：序号画成圆形徽标，文字紧挨着。
+        // 之前把序号和文字放在同一个 Row 里、外层又用了居中的滚动容器，内容一超屏
+        // 顶部就被裁掉，用户只看到"1. 2. 3. 4."而没有文字。
         strings.connectSteps.forEachIndexed { index, step ->
-            Row(Modifier.padding(vertical = 5.dp)) {
+            Row(
+                Modifier.padding(vertical = 6.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Box(
+                    Modifier
+                        .size(22.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "${index + 1}",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                Spacer(Modifier.width(10.dp))
+
                 Text(
-                    text = "${index + 1}.",
+                    text = step,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(text = step, style = MaterialTheme.typography.bodyMedium)
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
 
-        // 实时状态：绿色=已连上，灰色=还没检测到
+        // 实时状态
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
@@ -369,15 +404,28 @@ private fun ConnectPage(strings: Strings, connected: Boolean) {
         }
 
         if (!connected) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = strings.connectNextBlocked,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
+
+            // 把当前网卡列出来：检测不到时，这行文字就是唯一能帮上忙的线索
+            if (interfaces.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = strings.connectInterfacesLabel + "：" +
+                        interfaces.joinToString("、") { info ->
+                            info.name + (info.ipv4?.let { " ($it)" } ?: "")
+                        },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         Text(
             text = strings.connectSkipHint,
             style = MaterialTheme.typography.bodySmall,

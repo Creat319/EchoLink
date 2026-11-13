@@ -49,6 +49,39 @@ class OnboardingLogicTest {
         assertFalse(UsbTetherDetector.isUsbInterfaceName("   "))
     }
 
+    // ---- 兜底判据：名字认不出来、但看着就是给电脑用的那条网 ----
+    // 换成 NetworkInterface 枚举之后加的这一层，因为有些 OEM 的 tether 网卡不叫 rndis/usb
+
+    @Test
+    fun unknownNameWithPrivateIpv4IsTether() {
+        // 华为/小米等可能有奇怪命名，靠私有地址兜住
+        assertTrue(UsbTetherDetector.isLikelyTetherInterface("eth0", false, true, "192.168.42.129"))
+        assertTrue(UsbTetherDetector.isLikelyTetherInterface("rev_rmnet8", false, true, "192.168.96.1"))
+        assertTrue(UsbTetherDetector.isLikelyTetherInterface("ncm0", false, true, "10.10.0.1"))
+    }
+
+    @Test
+    fun knownUpstreamInterfacesAreNotTether() {
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("wlan0", false, true, "192.168.1.5"))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("rmnet_data0", false, true, "10.1.2.3"))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("ccmni0", false, true, "10.1.2.3"))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("ap0", false, true, "192.168.43.1"))
+    }
+
+    @Test
+    fun publicIpv4IsNotTether() {
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("eth0", false, true, "8.8.8.8"))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("eth0", false, true, "172.32.0.1"))
+    }
+
+    @Test
+    fun loopbackDownOrMissingAddressIsNotTether() {
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("lo", true, true, "127.0.0.1"))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("eth0", false, false, "192.168.42.1"))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface("eth0", false, true, null))
+        assertFalse(UsbTetherDetector.isLikelyTetherInterface(null, false, true, "192.168.42.1"))
+    }
+
     // ---- 语言 ----
 
     @Test

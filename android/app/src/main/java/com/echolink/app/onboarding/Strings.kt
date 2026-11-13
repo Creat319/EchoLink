@@ -57,6 +57,8 @@ interface Strings {
     val connectDetected: String
     val connectNextBlocked: String
     val connectSkipHint: String
+    val connectInterfacesLabel: String
+    val connectManualContinue: String
 
     // ---- 主界面 ----
     val appTitle: String
@@ -119,6 +121,8 @@ object ZhCn : Strings {
     override val connectDetected = "已检测到 USB 网络共享，可以继续"
     override val connectNextBlocked = "连接成功后才能点「下一步」"
     override val connectSkipHint = "也可以先跳过，这些步骤之后还能在电脑端界面上看到。"
+    override val connectInterfacesLabel = "当前网卡"
+    override val connectManualContinue = "检测不到？手动继续"
 
     override val appTitle = "EchoLink"
     override val btnStartReceive = "开始接收"
@@ -180,6 +184,8 @@ object ZhTw : Strings {
     override val connectDetected = "已偵測到 USB 網路共用，可以繼續"
     override val connectNextBlocked = "連線成功後才能點「下一步」"
     override val connectSkipHint = "也可以先跳過，這些步驟之後還能在電腦端介面上看到。"
+    override val connectInterfacesLabel = "目前網卡"
+    override val connectManualContinue = "偵測不到？手動繼續"
 
     override val appTitle = "EchoLink"
     override val btnStartReceive = "開始接收"
@@ -241,6 +247,8 @@ object Ja : Strings {
     override val connectDetected = "USB テザリングを検出しました。続行できます"
     override val connectNextBlocked = "接続が成功すると「次へ」を押せます"
     override val connectSkipHint = "スキップしても、この手順は PC 側の画面でいつでも確認できます。"
+    override val connectInterfacesLabel = "現在のインターフェース"
+    override val connectManualContinue = "検出されない場合は手動で続行"
 
     override val appTitle = "EchoLink"
     override val btnStartReceive = "受信開始"
@@ -302,6 +310,8 @@ object En : Strings {
     override val connectDetected = "USB tethering detected — you can continue"
     override val connectNextBlocked = "\"Next\" becomes available once connected"
     override val connectSkipHint = "You can also skip this; the same steps are shown on the PC side."
+    override val connectInterfacesLabel = "Interfaces"
+    override val connectManualContinue = "Not detected? Continue anyway"
 
     override val appTitle = "EchoLink"
     override val btnStartReceive = "Start receiving"

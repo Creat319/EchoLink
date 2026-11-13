@@ -1,69 +1,175 @@
 package com.echolink.app.net
 
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.Build
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 /**
- * 检测手机是否已经通过 USB 接到电脑上并开启了网络共享。
+ * 检测手机是否已经通过 USB 接到电脑并开启了网络共享。
  *
- * 判据（两条任一成立即算已连接）：
- * 1. Android 12+ 的网络能力里带 `TRANSPORT_USB`；
- * 2. 活动网络的接口名以 `rndis` / `usb` 开头 —— 这是 USB 网卡在 Android 上的典型命名。
+ * **不要用 ConnectivityManager.allNetworks**：那里只有手机的**上行**网络（WiFi / 蜂窝）。
+ * USB 网络共享时，`rndis0` / `usb0` 是手机**给电脑**建的那条局域网，它属于 Tethering
+ * 子系统，不在 allNetworks 里。用错这一点会让引导页永远等不到"已连接"。
  *
- * 不去碰 `UsbManager`：手机作为**从设备**连到电脑时，UsbManager 里看不到主机，
- * 那条路在设备模式下永远返回空。
+ * 正确做法是枚举系统网卡（`NetworkInterface`）。
+ *
+ * 判据优先级：
+ * 1. 网卡名以 `rndis` / `usb` 开头 —— 绝大多数机型的 USB 网卡命名；
+ * 2. 兜底：**不属于任何已知上行类型**（wlan / rmnet / ccmni…）、处于启用状态、
+ *    且拿到私有 IPv4 地址的网卡 —— 那些 OEM 自创命名的 tether 网卡靠这条兜住。
  */
 object UsbTetherDetector {
 
-    private val UsbInterfacePrefixes = listOf("rndis", "usb")
+    private val UsbPrefixes = listOf("rndis", "usb")
 
     /**
-     * 接口名是否是 USB 网卡。
-     * 抽成纯函数是为了能单测——这类"看着像就行"的判定最容易误伤（比如把 wlan0 判成 USB）。
+     * 已知的"非 USB"网卡名前缀：WiFi、蜂窝、热点、隧道、回环等。
+     * 兜底判据要靠它排除掉正常的手机上网网卡。
      */
+    private val KnownNonUsbPrefixes = listOf(
+        "wlan", "ap", "p2p", "rmnet", "ccmni", "clat", "dummy", "sit", "ip6tnl",
+        "tun", "tap", "ppp", "wwan", "v4-", "bridge", "lo",
+    )
+
+    /** 一段网卡信息，用于界面显示与排查。 */
+    data class InterfaceInfo(
+        val name: String,
+        val ipv4: String?,
+        val isUsb: Boolean,
+    )
+
+    /** 纯函数：按名字判断是不是 USB 网卡。抽出来是为了能单测。 */
     fun isUsbInterfaceName(name: String?): Boolean {
         if (name.isNullOrBlank()) {
             return false
         }
 
-        return UsbInterfacePrefixes.any { name.startsWith(it, ignoreCase = true) }
+        return UsbPrefixes.any { name.startsWith(it, ignoreCase = true) }
     }
 
-    fun isConnected(context: Context): Boolean {
-        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return false
+    /**
+     * 纯函数：兜底判据——名字不认识、但看着就是一条"给电脑用的"网卡。
+     * 只看 IPv4 私有地址 + 不是已知的 WiFi/蜂窝接口名。
+     */
+    fun isLikelyTetherInterface(name: String?, isLoopback: Boolean, isUp: Boolean, ipv4: String?): Boolean {
+        if (name.isNullOrBlank() || isLoopback || !isUp || ipv4.isNullOrBlank()) {
+            return false
+        }
 
-        return try {
-            manager.allNetworks.any { network ->
-                val capabilities = manager.getNetworkCapabilities(network)
-                if (capabilities != null
-                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                    && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_USB)
-                ) {
-                    return@any true
+        val lower = name.lowercase()
+        if (KnownNonUsbPrefixes.any { lower.startsWith(it) }) {
+            return false
+        }
+
+        return isPrivateIpv4(ipv4)
+    }
+
+    private fun isPrivateIpv4(address: String): Boolean {
+        val parts = address.split('.')
+        if (parts.size != 4) {
+            return false
+        }
+
+        val first = parts[0].toIntOrNull() ?: return false
+        val second = parts[1].toIntOrNull() ?: return false
+
+        return when (first) {
+            10 -> true
+            172 -> second in 16..31
+            192 -> second == 168
+            else -> false
+        }
+    }
+
+    /** 枚举所有启用的网卡（含名字与 IPv4），供界面显示与排查。 */
+    fun listInterfaces(): List<InterfaceInfo> {
+        val result = mutableListOf<InterfaceInfo>()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return result
+            for (nic in interfaces) {
+                val up = try {
+                    nic.isUp
+                } catch (_: Throwable) {
+                    false
                 }
 
-                isUsbInterfaceName(manager.getLinkProperties(network)?.interfaceName)
+                if (!up) {
+                    continue
+                }
+
+                val ipv4 = try {
+                    nic.inetAddresses.toList()
+                        .filterIsInstance<Inet4Address>()
+                        .firstOrNull { !it.isLoopbackAddress }
+                        ?.hostAddress
+                } catch (_: Throwable) {
+                    null
+                }
+
+                result.add(
+                    InterfaceInfo(
+                        name = nic.name,
+                        ipv4 = ipv4,
+                        isUsb = isUsbInterfaceName(nic.name),
+                    ),
+                )
             }
         } catch (_: Throwable) {
-            // 权限被改、系统接口异常等情况一律当"没连上"，不让引导页崩
-            false
+            // 枚举失败就当没找到，交给 UI 提示
         }
+
+        return result
     }
 
-    /** 尽量给用户看出是哪块网卡（排查用），拿不到就返回 null。 */
-    fun connectedInterfaceName(context: Context): String? {
-        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return null
+    fun isConnected(): Boolean {
+        val interfaces = NetworkInterface.getNetworkInterfaces() ?: return false
+        try {
+            for (nic in interfaces) {
+                val up = try {
+                    nic.isUp
+                } catch (_: Throwable) {
+                    false
+                }
 
-        return try {
-            manager.allNetworks
-                .mapNotNull { manager.getLinkProperties(it)?.interfaceName }
-                .firstOrNull { isUsbInterfaceName(it) }
+                if (!up) {
+                    continue
+                }
+
+                if (isUsbInterfaceName(nic.name)) {
+                    return true
+                }
+
+                val ipv4 = try {
+                    nic.inetAddresses.toList()
+                        .filterIsInstance<Inet4Address>()
+                        .firstOrNull { !it.isLoopbackAddress }
+                        ?.hostAddress
+                } catch (_: Throwable) {
+                    null
+                }
+
+                val loopback = try {
+                    nic.isLoopback
+                } catch (_: Throwable) {
+                    false
+                }
+
+                if (isLikelyTetherInterface(nic.name, loopback, up, ipv4)) {
+                    return true
+                }
+            }
         } catch (_: Throwable) {
-            null
+            return false
         }
+
+        return false
+    }
+
+    /** 命中的那个网卡名（排查用）。 */
+    fun matchedInterfaceName(): String? {
+        val interfaces = listInterfaces()
+        return interfaces.firstOrNull { it.isUsb }?.name
+            ?: interfaces.firstOrNull {
+                isLikelyTetherInterface(it.name, false, true, it.ipv4)
+            }?.name
     }
 }
