@@ -54,8 +54,27 @@ artifacts\pc\EchoLink.Diagnostics.exe    诊断工具
 
 脚本会：写 `local.properties`（若缺）→ `gradlew` → 打印 APK 路径。
 产物：`android\app\build\outputs\apk\debug\app-debug.apk`，脚本会同时复制一份到
-`artifacts\echolink-arm64-debug.apk`（10.6 MB，arm64-v8a）。注意 `artifacts/` 不入库，
-它是构建产物目录；要分发请用 GitHub Releases 挂 APK。
+`artifacts\echolink-arm64-debug.apk`（约 13.3 MB，**含三种 ABI**）。
+注意 `artifacts/` 不入库，它是构建产物目录；要分发请用 GitHub Releases 挂 APK。
+
+**文件名里的 `arm64` 是历史遗留**，现在这三种 ABI 都在一个包里，系统会自己挑对应的
+`.so`：
+
+| ABI | 用途 | 自研引擎 .so | 16 KB 页对齐 |
+| --- | --- | --- | --- |
+| `arm64-v8a` | 主流手机 | 57 KB | ✅（`0x4000`） |
+| `armeabi-v7a` | 老 32 位手机 / 廉价平板 | 23 KB | 不适用（32 位只需 4 KB） |
+| `x86_64` | 模拟器、少数平板 | 56 KB | ✅（`0x4000`） |
+
+> 为什么不改名：版本接口里的下载地址写的是 `echolink-arm64-debug.apk`，
+> 改名会让所有客户端的「立即下载」变成 404。要改名必须同时升级服务端与客户端。
+
+装的时候看 `native-code` 是否包含目标 ABI：
+
+```powershell
+aapt2 dump badging .\artifacts\echolink-arm64-debug.apk | Select-String "native-code"
+# native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'
+```
 
 ### 3.1 安装
 

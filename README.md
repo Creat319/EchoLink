@@ -11,7 +11,7 @@
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows&logoColor=white)](docs/build.md)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](pc/)
 [![WPF](https://img.shields.io/badge/WPF-Material%20Design-68217A)](pc/src/EchoLink.App)
-[![Android](https://img.shields.io/badge/Android-arm64--v8a-3DDC84?logo=android&logoColor=white)](android/)
+[![Android](https://img.shields.io/badge/Android-arm64%20%7C%20arm32%20%7C%20x86__64-3DDC84?logo=android&logoColor=white)](android/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](android/)
 [![Oboe](https://img.shields.io/badge/Oboe-1.9.3-EE6C4D)](android/app/src/main/cpp)
 [![Latency](https://img.shields.io/badge/latency-50–70%20ms%20P99-brightgreen)](#实测数据)

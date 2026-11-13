@@ -13,12 +13,16 @@ android {
         applicationId = "com.echolink.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.3.4"
+        versionCode = 9
+        versionName = "0.3.5"
 
-        // 目标平台：arm64 手机。不打包 32 位与模拟器 ABI。
+        // 四种 ABI 全打：
+        // - arm64-v8a：主流手机（性能最好，Oboe 低延迟路径最完整）
+        // - armeabi-v7a：老 32 位手机 / 廉价平板
+        // - x86_64：模拟器与少数平板（也方便在没有真机时验证界面）
+        // 原生代码是纯 C++17，没有架构相关分支；Oboe prefab 四种都提供。
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
 
         externalNativeBuild {

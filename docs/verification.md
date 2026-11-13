@@ -16,13 +16,25 @@
 | Android APK | `android\gradlew.bat :app:assembleDebug` | **BUILD SUCCESSFUL**，`app-debug.apk` 10.61 MB |
 | Android 单元测试 | `android\gradlew.bat :app:testDebugUnitTest` | **19 / 19 通过** |
 
-APK 内容确认（arm64-v8a only）：
+APK 内容确认（首次验证时只打了 arm64-v8a；v0.3.5 起改为三种 ABI）：
 
 ```
 lib/arm64-v8a/libecholink_audio.so   50.9 KB   ← 自研 Oboe 引擎
 lib/arm64-v8a/liboboe.so            289.1 KB
 lib/arm64-v8a/libc++_shared.so     1224.2 KB
 ```
+
+v0.3.5 的多 ABI 实测（`aapt2 dump badging` 的 `native-code` 字段 + `zipalign -c -P 16`）：
+
+```
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'
+arm64-v8a   libecholink_audio.so  57,072 B   LOAD 对齐 0x4000（16 KB 页）
+armeabi-v7a libecholink_audio.so  23,380 B   LOAD 对齐 0x1000（32 位，符合预期）
+x86_64      libecholink_audio.so  55,568 B   LOAD 对齐 0x4000（16 KB 页）
+APK 总体积 11.2 MB → 13.3 MB（多出 2.1 MB，主要是每个 ABI 各一份 libc++_shared）
+```
+
+> 只验证了「能构建出三种 ABI 且对齐正确」，**没有在 arm32 / x86_64 真机上跑过**。
 
 单元测试明细：
 
