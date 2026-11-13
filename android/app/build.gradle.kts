@@ -13,8 +13,8 @@ android {
         applicationId = "com.echolink.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.3.3"
+        versionCode = 8
+        versionName = "0.3.4"
 
         // 目标平台：arm64 手机。不打包 32 位与模拟器 ABI。
         ndk {
@@ -85,5 +85,8 @@ dependencies {
     implementation("com.google.oboe:oboe:1.9.3")
 
     testImplementation("junit:junit:4.13.2")
+    // Android SDK 里的 org.json 在单元测试中是桩实现（调用即抛 "Stub!"），
+    // 想在 JVM 上真正验证 JSON 解析，必须引入官方实现。
+    testImplementation("org.json:json:20240303")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

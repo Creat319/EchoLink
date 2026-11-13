@@ -28,11 +28,13 @@ object UpdateChecker {
 
     /**
      * 同步查询（调用方负责放到 IO 线程）。任何失败返回 null，不影响主流程。
+     *
+     * [endpoint] 可覆盖，仅为了让单元测试能指向本地服务端——线上永远用 [ENDPOINT]。
      */
-    fun check(currentVersion: String): Result? {
+    fun check(currentVersion: String, endpoint: String = ENDPOINT): Result? {
         var connection: HttpURLConnection? = null
         return try {
-            connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
+            connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 5_000
                 readTimeout = 5_000
@@ -61,6 +63,17 @@ object UpdateChecker {
             connection?.disconnect()
         }
     }
+
+    /**
+     * 是否要弹窗提醒。
+     *
+     * - 手点「检查更新」：[manual] = true，**每次都弹**（用户主动问的，必须给结果）
+     * - 启动时自动检查：只有"没对这个版本说过不再提示"才弹
+     *
+     * 存的是版本号而不是布尔开关：下次发新版仍会弹，不会因为点过一次就永久静音。
+     */
+    fun shouldPrompt(latestVersion: String, skippedVersion: String?, manual: Boolean): Boolean
+        = manual || latestVersion != skippedVersion
 
     /** remote 是否比 local 新。 */
     fun isNewer(remote: String?, local: String?): Boolean = compareVersions(remote, local) > 0

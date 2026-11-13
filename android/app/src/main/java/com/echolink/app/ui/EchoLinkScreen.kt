@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -44,6 +46,54 @@ import com.echolink.app.ReceiverSettings
 import com.echolink.app.ReceiverState
 import java.util.Locale
 
+/**
+ * 发现新版本时的弹窗。
+ *
+ * 三个出口，分别对应三种用户意图：
+ * - 立即下载：走浏览器（APK 的安装仍由系统确认，应用不静默安装）
+ * - 稍后：这次先不更新，下次启动还会提醒
+ * - 不再提示此版本：记住**这个版本号**，同一个版本不再弹；发新版仍会弹
+ */
+@Composable
+fun UpdateAvailableDialog(
+    version: String,
+    onDownload: () -> Unit,
+    onLater: () -> Unit,
+    onSkipVersion: () -> Unit,
+) {
+    val context = LocalContext.current
+    val currentVersion = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "-"
+    }
+
+    AlertDialog(
+        onDismissRequest = onLater,
+        title = { Text("发现新版本 $version") },
+        text = {
+            Column {
+                Text("当前版本 v$currentVersion。")
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "更新包会用浏览器下载，下载完点开安装即可覆盖，设置和数据都不会丢。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDownload) { Text("立即下载") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onLater) { Text("稍后") }
+                TextButton(onClick = onSkipVersion) { Text("不再提示此版本") }
+            }
+        },
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EchoLinkApp(
@@ -56,6 +106,9 @@ fun EchoLinkApp(
     onSettingsChange: (ReceiverSettings) -> Unit,
     onCheckUpdate: () -> Unit,
     onOpenDownload: () -> Unit,
+    updateDialogVersion: String? = null,
+    onDismissUpdateDialog: () -> Unit = {},
+    onSkipUpdateVersion: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -96,6 +149,19 @@ fun EchoLinkApp(
             item { UpdateCard(state, onCheckUpdate, onOpenDownload) }
             item { LogCard(state) }
         }
+    }
+
+    // 弹窗挂在 Scaffold 外面：它不参与滚动，检测到就浮在最上层
+    if (updateDialogVersion != null) {
+        UpdateAvailableDialog(
+            version = updateDialogVersion,
+            onDownload = {
+                onDismissUpdateDialog()
+                onOpenDownload()
+            },
+            onLater = onDismissUpdateDialog,
+            onSkipVersion = onSkipUpdateVersion,
+        )
     }
 }
 

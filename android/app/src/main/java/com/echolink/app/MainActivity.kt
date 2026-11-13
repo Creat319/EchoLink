@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import com.echolink.app.ui.EchoLinkApp
 import com.echolink.app.ui.EchoLinkTheme
@@ -28,6 +29,9 @@ class MainActivity : ComponentActivity() {
 
     /** 用户点了「开始接收」，正在等麦克风权限的结果。 */
     private var pendingStart = false
+
+    /** 有待弹窗提醒的新版本号；null 表示不弹。 */
+    private val updateDialogVersion = mutableStateOf<String?>(null)
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* 拒绝也能跑，只是没有通知 */ }
@@ -94,8 +98,21 @@ class MainActivity : ComponentActivity() {
                     onConfirmBeep = { heard -> AudioReceiverService.confirm(this, heard) },
                     onReopen = { AudioReceiverService.reopen(this) },
                     onSettingsChange = applySettings,
-                    onCheckUpdate = { checkUpdates() },
+                    onCheckUpdate = { checkUpdates(manual = true) },
                     onOpenDownload = { openDownloadPage() },
+                    updateDialogVersion = updateDialogVersion.value,
+                    onDismissUpdateDialog = { updateDialogVersion.value = null },
+                    onSkipUpdateVersion = {
+                        updateDialogVersion.value?.let { version ->
+                            settingsStore.markUpdateSkipped(version)
+                            // 卡片上仍保留下载入口，只是不再自动弹窗
+                            EchoLinkStateHolder.setUpdate(
+                                "有新版本 $version（已选择不再提示）",
+                                version,
+                            )
+                        }
+                        updateDialogVersion.value = null
+                    },
                 )
             }
         }
@@ -111,8 +128,11 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 版本自检。**只提示、不自动下载**：APK 交给浏览器，用户能看到域名再决定装不装。
+     *
+     * @param quiet 启动时的静默检查：失败不写状态文案（离线是常态）
+     * @param manual 用户手点的「检查更新」：即使这个版本被"不再提示"过，也要弹窗
      */
-    private fun checkUpdates(quiet: Boolean = false) {
+    private fun checkUpdates(quiet: Boolean = false, manual: Boolean = false) {
         if (!quiet) {
             EchoLinkStateHolder.setUpdate("正在检查更新…", null)
         }
@@ -128,10 +148,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                result.isNewer -> EchoLinkStateHolder.setUpdate(
-                    "有新版本 ${result.latestVersion}（当前 v$local）",
-                    result.latestVersion,
-                )
+                result.isNewer -> {
+                    EchoLinkStateHolder.setUpdate(
+                        "有新版本 ${result.latestVersion}（当前 v$local）",
+                        result.latestVersion,
+                    )
+
+                    // 自动检查时尊重"不再提示此版本"；手点检查则每次都弹
+                    if (UpdateChecker.shouldPrompt(
+                            latestVersion = result.latestVersion,
+                            skippedVersion = settingsStore.skippedUpdateVersion(),
+                            manual = manual,
+                        )
+                    ) {
+                        updateDialogVersion.value = result.latestVersion
+                    }
+                }
 
                 else -> EchoLinkStateHolder.setUpdate("已是最新（v$local）", null)
             }

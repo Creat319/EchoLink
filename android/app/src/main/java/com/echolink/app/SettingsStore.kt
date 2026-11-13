@@ -28,6 +28,17 @@ class SettingsStore(context: Context) {
             .apply()
     }
 
+    /**
+     * 用户点过「不再提示此版本」的那个版本号。
+     * 存的是**版本号本身**而不是布尔值：下次发新版（比如 0.3.10）时会重新弹窗，
+     * 不会出现"永久静音后再也收不到更新提示"。
+     */
+    fun skippedUpdateVersion(): String? = prefs.getString(KEY_SKIPPED_UPDATE, null)
+
+    fun markUpdateSkipped(version: String) {
+        prefs.edit().putString(KEY_SKIPPED_UPDATE, version).apply()
+    }
+
     private companion object {
         const val KEY_PORT = "port"
         const val KEY_EXCLUSIVE = "exclusive"
@@ -35,5 +46,6 @@ class SettingsStore(context: Context) {
         const val KEY_MANUAL_TARGET = "manual_target_ms"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         const val KEY_MIC_ENABLED = "mic_enabled"
+        const val KEY_SKIPPED_UPDATE = "skipped_update_version"
     }
 }
