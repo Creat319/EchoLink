@@ -5,6 +5,54 @@
 
 ---
 
+## v0.4.0
+
+更新下载地址迁到新服务器，版本号进位到 0.4.0。
+
+### 下载地址
+
+| 平台 | 旧 | 新 |
+| --- | --- | --- |
+| PC | `http://el.carovo.shop/winclient.zip` | `http://119.29.227.224:20019/dl/windows` |
+| Android | `http://el.carovo.shop/echolink-arm64-debug.apk` | `http://119.29.227.224:20019/dl/android` |
+
+版本接口仍是 `http://carovo.shop/api/version.php`。
+
+### 一并修掉的坑
+
+新地址是**裸 IP + 端口**，而 Android 的明文 HTTP 白名单（`network_security_config.xml`）
+里只有两个域名。不把 `119.29.227.224` 加进去，Android 9+ 会直接拦掉这个请求——
+表现是点了「立即下载」什么都不会发生，且没有任何报错。已加入白名单。
+
+### 自查命令
+
+诊断工具新增 `update`：查一次版本接口并打印判定结果，再对两个下载地址各发一次 HEAD。
+
+```
+dotnet run --project pc\tools\EchoLink.Diagnostics -- update
+```
+
+```
+版本接口：http://carovo.shop/api/version.php?format=json&key=…
+  服务端版本：0.3.1   code=0   scope=user
+  本地版本：  0.4.0
+  判定：      已是最新（服务端版本不高于本地，不提示）
+
+下载地址连通性：
+  Windows  200  3.50 MB    application/zip
+  Android  200  13.32 MB   application/vnd.android.package-archive
+```
+
+> 之前提的 APK `Content-Type: text/plain` 问题，新服务器已正确返回
+> `application/vnd.android.package-archive`。
+
+### 注意
+
+服务端版本目前还是 `0.3.1`，低于本版 0.4.0，因此**已升级到 0.4.0 的用户看不到更新提示**。
+要让 0.3.x 用户收到提示，把接口返回值改成 `0.4.0` 即可。
+
+---
+
 ## v0.3.6
 
 手机端新增**首次启动引导**：4 页，第一页选语言，最后一页要求真的把 USB 连上。

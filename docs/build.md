@@ -93,16 +93,36 @@ C:\Android\Sdk\platform-tools\adb.exe install -r .\artifacts\echolink-arm64-debu
 | --- | --- |
 | 代码里的版本号 | `pc/Directory.Build.props` 的 `<Version>`、`android/app/build.gradle.kts` 的 `versionName`/`versionCode` |
 | 版本接口 | `http://carovo.shop/api/version.php` 的返回值改成同一个版本号（接口由项目维护者控制） |
-| 下载地址 | 上传 `winclient.zip` 与 APK 覆盖 `http://el.carovo.shop/` 下同名文件 |
+| 下载地址 | 把新包传到 `http://119.29.227.224:20019/dl/windows`（PC，zip）与 `/dl/android`（APK） |
+
+当前下载地址（v0.4.0 起）：
+
+| 平台 | 地址 | 说明 |
+| --- | --- | --- |
+| PC | `http://119.29.227.224:20019/dl/windows` | 返回 `application/zip` |
+| Android | `http://119.29.227.224:20019/dl/android` | 返回 `application/vnd.android.package-archive` |
+
+> ⚠️ **换下载地址时别忘了 Android 的明文白名单**：
+> `android/app/src/main/res/xml/network_security_config.xml` 里要加上新主机
+> （裸 IP 也要单列一条 `<domain>119.29.227.224</domain>`），否则 Android 9+ 会
+> 直接拦掉 http 请求，「立即下载」永远打不开。
 
 接口返回的版本**低于或等于**客户端时不会提示（这是刻意的：服务端回滚不该弹"有新版本"）。
 所以忘了改接口的后果是"没人收到更新提示"，而不是"所有人都被提示更新"。
 
-> 已知的两个服务端小毛病（2026-11 实测）：
-> - APK 的 `Content-Type` 返回 `text/plain`，部分浏览器会当文本显示而不是下载；
->   建议改成 `application/vnd.android.package-archive`。
-> - 版本接口与下载页都是明文 HTTP，可被中间人篡改。影响面限于"弹一个假提示"，
->   但正解是给域名上 HTTPS。
+自查命令（换服务器、换域名后先跑这个，别等用户点了「立即下载」才发现 404）：
+
+```powershell
+dotnet run --project pc\tools\EchoLink.Diagnostics -- update
+```
+
+会打印接口返回的版本、本地版本、判定结果，并对两个下载地址各发一次 HEAD。
+
+> 已解决：APK 的 `Content-Type` 曾是 `text/plain`，部分浏览器会当文本显示而不是下载；
+> v0.4.0 时新服务器已返回 `application/vnd.android.package-archive`。
+>
+> 仍未解决：版本接口与下载地址都是明文 HTTP，可被中间人篡改。影响面限于"弹一个假提示"，
+> 但正解是上 HTTPS。
 
 ### 3.2 release 签名
 

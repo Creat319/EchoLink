@@ -30,6 +30,7 @@ internal static class Program
             {
                 "devices" => ListDevices(),
                 "micdevices" => ListMicDevices(),
+                "update" => CheckUpdate(),
                 "periods" => ListPeriods(),
                 "targets" => ListTargets(),
                 "capture" => CaptureAndDump(options),
@@ -99,6 +100,58 @@ internal static class Program
     /// 列出虚拟麦克风候选（PC 端"一键自动配置"用的就是同一套判据）。
     /// 排查"为什么没识别到虚拟声卡"时先跑这个。
     /// </summary>
+    /// <summary>
+    /// 检查更新配置：查一次版本接口，再对两个下载地址各发一次 HEAD。
+    /// 换服务器、换域名之后先跑这个，别等用户点了「立即下载」才发现 404。
+    /// </summary>
+    private static int CheckUpdate()
+    {
+        Console.WriteLine("版本接口：" + Core.Update.UpdateChecker.Endpoint);
+
+        var local = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        var info = Core.Update.UpdateChecker.CheckAsync().GetAwaiter().GetResult();
+        if (info is null)
+        {
+            Console.WriteLine("  查询失败（离线 / 服务端异常 / 返回格式不对）");
+        }
+        else
+        {
+            Console.WriteLine($"  服务端版本：{info.Version}   code={info.Code}   scope={info.Scope}");
+            Console.WriteLine($"  本地版本：  {local}");
+            Console.WriteLine("  判定：      " + (Core.Update.UpdateChecker.IsNewer(info.Version, local)
+                ? "有新版本，客户端会提示更新"
+                : "已是最新（服务端版本不高于本地，不提示）"));
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("下载地址连通性：");
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        foreach (var (label, url) in new[]
+                 {
+                     ("Windows", Core.Update.UpdateChecker.WindowsDownloadUrl),
+                     ("Android", Core.Update.UpdateChecker.AndroidDownloadUrl),
+                 })
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Head, url);
+                using var response = http.Send(request);
+                var length = response.Content.Headers.ContentLength;
+                var type = response.Content.Headers.ContentType?.MediaType ?? "-";
+                Console.WriteLine($"  {label,-8} {(int)response.StatusCode}  " +
+                                  $"{(length is null ? "-" : (length.Value / 1024.0 / 1024.0).ToString("F2") + " MB"),-10} {type}");
+                Console.WriteLine($"           {url}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  {label,-8} 失败：{ex.Message}");
+                Console.WriteLine($"           {url}");
+            }
+        }
+
+        return 0;
+    }
+
     private static int ListMicDevices()
     {
         var candidates = Core.Audio.VirtualMicLocator.Locate();

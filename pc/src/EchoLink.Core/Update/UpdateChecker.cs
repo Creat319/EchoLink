@@ -21,9 +21,9 @@ public static class UpdateChecker
     public const string Endpoint =
         "http://carovo.shop/api/version.php?format=json&key=ae5d71d171e39cc04defc29293506fc0";
 
-    public const string WindowsDownloadUrl = "http://el.carovo.shop/winclient.zip";
+    public const string WindowsDownloadUrl = "http://119.29.227.224:20019/dl/windows";
 
-    public const string AndroidDownloadUrl = "http://el.carovo.shop/echolink-arm64-debug.apk";
+    public const string AndroidDownloadUrl = "http://119.29.227.224:20019/dl/android";
 
     private static readonly HttpClient Http = new()
     {

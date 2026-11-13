@@ -19,7 +19,7 @@ object UpdateChecker {
     const val ENDPOINT =
         "http://carovo.shop/api/version.php?format=json&key=ae5d71d171e39cc04defc29293506fc0"
 
-    const val ANDROID_DOWNLOAD_URL = "http://el.carovo.shop/echolink-arm64-debug.apk"
+    const val ANDROID_DOWNLOAD_URL = "http://119.29.227.224:20019/dl/android"
 
     data class Result(
         val latestVersion: String,
