@@ -2,6 +2,7 @@ package com.echolink.app
 
 import android.content.Context
 import com.echolink.app.audio.Protocol
+import com.echolink.app.onboarding.AppLanguage
 
 /** 极简设置存储（SharedPreferences）。只有几项，不需要 DataStore 的复杂度。 */
 class SettingsStore(context: Context) {
@@ -15,6 +16,7 @@ class SettingsStore(context: Context) {
         manualTargetWaterMs = prefs.getInt(KEY_MANUAL_TARGET, 30),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
         micEnabled = prefs.getBoolean(KEY_MIC_ENABLED, true),
+        language = AppLanguage.fromTag(prefs.getString(KEY_LANGUAGE, null)),
     )
 
     fun save(settings: ReceiverSettings) {
@@ -25,7 +27,15 @@ class SettingsStore(context: Context) {
             .putInt(KEY_MANUAL_TARGET, settings.manualTargetWaterMs)
             .putBoolean(KEY_KEEP_SCREEN_ON, settings.keepScreenOn)
             .putBoolean(KEY_MIC_ENABLED, settings.micEnabled)
+            .putString(KEY_LANGUAGE, settings.language.tag)
             .apply()
+    }
+
+    /** 引导是否已经走完（含主动跳过）。false 时启动直接进引导。 */
+    fun onboardingDone(): Boolean = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
+
+    fun markOnboardingDone() {
+        prefs.edit().putBoolean(KEY_ONBOARDING_DONE, true).apply()
     }
 
     /**
@@ -46,6 +56,8 @@ class SettingsStore(context: Context) {
         const val KEY_MANUAL_TARGET = "manual_target_ms"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         const val KEY_MIC_ENABLED = "mic_enabled"
+        const val KEY_LANGUAGE = "language"
+        const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_SKIPPED_UPDATE = "skipped_update_version"
     }
 }

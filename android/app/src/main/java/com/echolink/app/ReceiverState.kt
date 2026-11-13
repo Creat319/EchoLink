@@ -3,6 +3,7 @@ package com.echolink.app
 import com.echolink.app.audio.EngineStats
 import com.echolink.app.audio.Protocol
 import com.echolink.app.net.NetworkSnapshot
+import com.echolink.app.onboarding.AppLanguage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -25,6 +26,9 @@ data class ReceiverSettings(
     // 默认开启：装了本应用就是要用它当麦克风，且权限会在首次启动时弹窗询问。
     // 不想要的人关一次即可（会持久化）。
     val micEnabled: Boolean = true,
+
+    /** 界面语言（引导第一页可选，之后在设置里也能改）。 */
+    val language: AppLanguage = AppLanguage.ZH_CN,
 )
 
 /** UI 唯一的状态源。由 AudioEngineController 覆盖写，Activity 只读。 */

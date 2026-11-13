@@ -19,6 +19,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import com.echolink.app.onboarding.OnboardingScreen
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
 import com.echolink.app.ui.EchoLinkApp
 import com.echolink.app.ui.EchoLinkTheme
@@ -72,6 +75,26 @@ class MainActivity : ComponentActivity() {
                 EchoLinkStateHolder.updateSettings(newSettings)
             }
 
+            // 首次启动先走引导；走完（或跳过）记一笔，之后不再弹
+            var showOnboarding by remember { mutableStateOf(!settingsStore.onboardingDone()) }
+
+            if (showOnboarding) {
+                EchoLinkTheme {
+                    OnboardingScreen(
+                        initialLanguage = state.settings.language,
+                        onLanguageChange = { language ->
+                            // 选语言立即生效并落盘，跳过后也记住
+                            applySettings(EchoLinkStateHolder.liveSettings.copy(language = language))
+                        },
+                        onFinish = {
+                            settingsStore.markOnboardingDone()
+                            showOnboarding = false
+                        },
+                    )
+                }
+                return@setContent
+            }
+
             LaunchedEffect(state.settings.keepScreenOn) {
                 if (state.settings.keepScreenOn) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -113,6 +136,7 @@ class MainActivity : ComponentActivity() {
                         }
                         updateDialogVersion.value = null
                     },
+                    onReplayGuide = { showOnboarding = true },
                 )
             }
         }

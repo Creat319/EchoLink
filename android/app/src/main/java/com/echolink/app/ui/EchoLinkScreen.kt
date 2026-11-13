@@ -30,6 +30,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import com.echolink.app.onboarding.stringsFor
+import com.echolink.app.onboarding.LocalStrings
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,12 +112,16 @@ fun EchoLinkApp(
     updateDialogVersion: String? = null,
     onDismissUpdateDialog: () -> Unit = {},
     onSkipUpdateVersion: () -> Unit = {},
+    onReplayGuide: () -> Unit = {},
 ) {
+    val strings = remember(state.settings.language) { stringsFor(state.settings.language) }
+
+    CompositionLocalProvider(LocalStrings provides strings) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("EchoLink · 手机当电脑音响", style = MaterialTheme.typography.titleMedium) },
+                title = { Text("EchoLink · ${strings.appTitle}", style = MaterialTheme.typography.titleMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground,
@@ -145,7 +152,7 @@ fun EchoLinkApp(
             }
 
             item { AddressCard(state) }
-            item { SettingsCard(state, onSettingsChange) }
+            item { SettingsCard(state, onSettingsChange, onReplayGuide) }
             item { UpdateCard(state, onCheckUpdate, onOpenDownload) }
             item { LogCard(state) }
         }
@@ -162,6 +169,7 @@ fun EchoLinkApp(
             onLater = onDismissUpdateDialog,
             onSkipVersion = onSkipUpdateVersion,
         )
+    }
     }
 }
 
@@ -230,7 +238,7 @@ private fun HeaderCard(
                     onClick = if (state.isRunning) onStop else onStart,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(if (state.isRunning) "停止接收" else "开始接收")
+                    Text(if (state.isRunning) LocalStrings.current.btnStop else LocalStrings.current.btnStartReceive)
                 }
 
                 OutlinedButton(onClick = onTestBeep, modifier = Modifier.weight(1f)) {
@@ -279,7 +287,7 @@ private fun BeepConfirmCard(onConfirmBeep: (Boolean) -> Unit) {
 
 @Composable
 private fun WaterCard(state: ReceiverState) {
-    SectionCard(title = "水位闭环", accent = MaterialTheme.colorScheme.primary) {
+    SectionCard(title = LocalStrings.current.sectionWater, accent = MaterialTheme.colorScheme.primary) {
         WaterSparkline(
             history = state.waterHistory,
             targetMs = state.targetWaterMs.toFloat(),
@@ -309,7 +317,7 @@ private fun WaterCard(state: ReceiverState) {
 
 @Composable
 private fun StreamCard(state: ReceiverState) {
-    SectionCard(title = "播放链路（Oboe / AAudio）", accent = MaterialTheme.colorScheme.secondary) {
+    SectionCard(title = LocalStrings.current.sectionPlayback, accent = MaterialTheme.colorScheme.secondary) {
         MetricRow("采样率", "${state.engine.sampleRate} Hz")
         MetricRow("声道", "${state.engine.channels}")
         MetricRow("burst", "${state.engine.framesPerBurst} 帧")
@@ -382,7 +390,7 @@ private fun StreamCard(state: ReceiverState) {
 @Composable
 private fun NetworkCard(state: ReceiverState) {
     val net = state.network
-    SectionCard(title = "网络（UDP）", accent = MaterialTheme.colorScheme.tertiary) {
+    SectionCard(title = LocalStrings.current.sectionNetwork, accent = MaterialTheme.colorScheme.tertiary) {
         MetricRow("发送端", net.senderAddress ?: "尚未收到数据")
         MetricRow("收包", "${net.packetsReceived}")
         MetricRow("收包速率", String.format(Locale.US, "%.1f 包/秒", net.packetsPerSecond))
@@ -400,7 +408,7 @@ private fun NetworkCard(state: ReceiverState) {
 @Composable
 private fun StabilityCard(state: ReceiverState) {
     val e = state.engine
-    SectionCard(title = "稳定性", accent = MaterialTheme.colorScheme.error) {
+    SectionCard(title = LocalStrings.current.sectionStability, accent = MaterialTheme.colorScheme.error) {
         MetricRow("欠载次数", "${e.underrunEvents}", valueColor = if (e.underrunEvents > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
         MetricRow("欠载补静音", "${e.underrunFrames} 帧")
         MetricRow("启动垫水位", "${e.prefillFrames} 帧", hint = "不计欠载")
@@ -429,7 +437,7 @@ private fun WarningCard(state: ReceiverState) {
 
 @Composable
 private fun AddressCard(state: ReceiverState) {
-    SectionCard(title = "本机地址（PC 端手动填这个）", accent = MaterialTheme.colorScheme.outline) {
+    SectionCard(title = LocalStrings.current.sectionAddress, accent = MaterialTheme.colorScheme.outline) {
         if (state.localAddresses.isEmpty()) {
             Text("未检测到可用 IPv4 地址", style = MaterialTheme.typography.bodySmall)
         } else {
@@ -452,16 +460,20 @@ private fun AddressCard(state: ReceiverState) {
 }
 
 @Composable
-private fun SettingsCard(state: ReceiverState, onSettingsChange: (ReceiverSettings) -> Unit) {
+private fun SettingsCard(
+    state: ReceiverState,
+    onSettingsChange: (ReceiverSettings) -> Unit,
+    onReplayGuide: () -> Unit,
+) {
     var portText by remember(state.settings.port) { mutableStateOf(state.settings.port.toString()) }
     var manualTarget by remember(state.settings.manualTargetWaterMs) {
         mutableStateOf(state.settings.manualTargetWaterMs.toFloat())
     }
 
-    SectionCard(title = "设置", accent = MaterialTheme.colorScheme.outline) {
+    SectionCard(title = LocalStrings.current.sectionSettings, accent = MaterialTheme.colorScheme.outline) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("上行麦克风（手机当 PC 麦克风）", style = MaterialTheme.typography.bodyMedium)
+                Text(LocalStrings.current.sectionMic, style = MaterialTheme.typography.bodyMedium)
                 Text(
                     text = "需要重启接收才生效；PC 端要选虚拟麦克风（如 CABLE Input）",
                     style = MaterialTheme.typography.bodySmall,
@@ -548,6 +560,18 @@ private fun SettingsCard(state: ReceiverState, onSettingsChange: (ReceiverSettin
             )
         }
 
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = LocalStrings.current.settingsReplayGuide,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(onClick = onReplayGuide) {
+                Text(LocalStrings.current.settingsReplayGuide)
+            }
+        }
+
         Text(
             text = "端口与独占模式的改动在下次“开始接收”时生效。",
             style = MaterialTheme.typography.bodySmall,
@@ -568,7 +592,7 @@ private fun UpdateCard(state: ReceiverState, onCheckUpdate: () -> Unit, onOpenDo
         }.getOrNull() ?: "-"
     }
 
-    SectionCard(title = "版本", accent = MaterialTheme.colorScheme.outline) {
+    SectionCard(title = LocalStrings.current.sectionVersion, accent = MaterialTheme.colorScheme.outline) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("当前 v$currentVersion", style = MaterialTheme.typography.bodyMedium)
@@ -600,7 +624,7 @@ private fun UpdateCard(state: ReceiverState, onCheckUpdate: () -> Unit, onOpenDo
 
 @Composable
 private fun LogCard(state: ReceiverState) {
-    SectionCard(title = "日志（最近 ${state.log.size} 条）", accent = MaterialTheme.colorScheme.outline) {
+    SectionCard(title = "${LocalStrings.current.sectionLog}（${state.log.size}）", accent = MaterialTheme.colorScheme.outline) {
         val tail = state.log.takeLast(14)
         if (tail.isEmpty()) {
             Text("—", style = MaterialTheme.typography.bodySmall)
