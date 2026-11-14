@@ -302,6 +302,21 @@ int32_t AudioEngine::openStreamLocked(bool exclusive) {
         return static_cast<int32_t>(result);
     }
 
+    // ---- 启动后再设一次缓冲 ----
+    // AAudio 在流启动**之前**改缓冲经常"返回成功但尺寸不变"：实机 2 小时跑下来，
+    // 上面那次 setBufferSizeInFrames 报 OK，实际仍是 2 burst / 10.7 ms。
+    // 启动后再设一次并回读，才是真正生效的时机。
+    if (sharing == oboe::SharingMode::Shared) {
+        const int32_t want = desired;
+        const auto reapply = _stream->setBufferSizeInFrames(want);
+        const int32_t afterStart = _stream->getBufferSizeInFrames();
+        if (afterStart > 0) {
+            _bufferSizeFrames.store(afterStart);
+        }
+        LOGI("buffer after start: want=%d got=%d (%s)",
+             want, afterStart, oboe::convertToText(static_cast<oboe::Result>(reapply)));
+    }
+
     _lastCallbackNanos.store(nowNanos());
     _maxCallbackGapNanos.store(0);
     _errorFlag.store(0);

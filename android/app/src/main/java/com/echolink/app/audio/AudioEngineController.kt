@@ -55,6 +55,7 @@ class AudioEngineController(
     private var underrunPendingCheckMs = 0L
     private var lastPrefillRequestMs = 0L
     private var lastBufferBumpMs = 0L
+    private var lastBufferBumpUnderruns = 0L
     private var traceWriter: java.io.BufferedWriter? = null
     private var lastTraceMs = 0L
     private var micUplink: MicUplink? = null
@@ -110,6 +111,7 @@ class AudioEngineController(
             underrunPendingCheckMs = 0
             lastPrefillRequestMs = 0
             lastBufferBumpMs = 0
+            lastBufferBumpUnderruns = 0
             bufferBursts = START_BUFFER_BURSTS
             openTrace()
             waterMinWindow.clear()
@@ -318,17 +320,16 @@ class AudioEngineController(
         }
     }
 
-    /** 按观测到的回调间隔决定要不要加大 Oboe 缓冲（比"等欠载发生"更早）。 */
+    /**
+     * 决定要不要加大 Oboe 缓冲。两个触发条件，任一成立即扩：
+     *
+     * 1. 回调间隔逼近缓冲（提前预警）；
+     * 2. **欠载次数在增长** —— 实机 2 小时跑下来欠载 2390 次，但回调间隔峰值只有 5.6 ms，
+     *    旧逻辑只盯条件 1，于是全程一次都没扩容，10.7 ms 的缓冲配 20 ms 的目标水位，
+     *    每隔几秒就欠载一次。欠载本身就是最直接的证据。
+     */
     private fun maybeGrowBuffer(activeEngine: NativeAudioEngine, nowMs: Long) {
-        // 用"调度型"间隔（原生已剔除开流 1 秒内的空档与 >100 ms 的流级停顿），
-        // 否则流启动时那个 200 ms 的正常空档会把缓冲一路顶到上限、再也降不回来。
-        val gapMs = stats.schedGapMaxMs
-        if (gapMs <= 0.0 || bufferBursts >= MAX_BUFFER_BURSTS) {
-            return
-        }
-
-        val bufferMs = stats.bufferMs
-        if (bufferMs <= 0.0 || gapMs < bufferMs * BUFFER_GAP_HEADROOM) {
+        if (bufferBursts >= MAX_BUFFER_BURSTS) {
             return
         }
 
@@ -336,10 +337,42 @@ class AudioEngineController(
             return
         }
 
+        // 用"调度型"间隔（原生已剔除开流 1 秒内的空档与 >100 ms 的流级停顿），
+        // 否则流启动时那个 200 ms 的正常空档会把缓冲一路顶到上限、再也降不回来。
+        val gapMs = stats.schedGapMaxMs
+        val gapWants = gapMs > 0.0 && stats.bufferMs > 0.0 && gapMs >= stats.bufferMs * BUFFER_GAP_HEADROOM
+
+        val underrunDelta = stats.underrunEvents - lastBufferBumpUnderruns
+        val underrunWants = underrunDelta >= UNDERRUNS_TO_GROW
+
+        if (!gapWants && !underrunWants) {
+            return
+        }
+
         lastBufferBumpMs = nowMs
-        bufferBursts++
-        val frames = activeEngine.setBufferSizeInBursts(bufferBursts)
-        log("回调间隔 ${"%.1f".format(gapMs)} ms 逼近缓冲 ${"%.1f".format(bufferMs)} ms，缓冲上调到 $bufferBursts burst（实际 $frames 帧）")
+        lastBufferBumpUnderruns = stats.underrunEvents
+
+        val attempt = bufferBursts + 1
+        val frames = activeEngine.setBufferSizeInBursts(attempt)
+        val burst = stats.framesPerBurst
+        val cause = if (underrunWants) {
+            "欠载 +$underrunDelta 次"
+        } else {
+            "回调间隔 ${"%.1f".format(gapMs)} ms 逼近缓冲 ${"%.1f".format(stats.bufferMs)} ms"
+        }
+
+        // 必须回读实际值：AAudio 可能"返回成功但尺寸不变"，只看返回码会误判成已扩容
+        if (frames > 0 && burst > 0) {
+            val actualBursts = frames / burst
+            if (actualBursts > bufferBursts) {
+                bufferBursts = actualBursts
+                log("缓冲上调到 $bufferBursts burst（$frames 帧 / ${"%.1f".format(stats.bufferMs)} ms）：$cause")
+            } else {
+                log("缓冲扩容未生效：请求 $attempt burst，设备实际仍是 $frames 帧 —— $cause")
+            }
+        } else {
+            log("缓冲扩容失败：$cause")
+        }
     }
 
     private fun watchdogTick() {
@@ -427,8 +460,8 @@ class AudioEngineController(
         // Oboe 缓冲必须能跨过 PC 端 10 ms 的成批发包间隔，否则会周期性欠载
         val minBufferMs = 15.0
         if (stats.bufferMs in 0.01..minBufferMs) {
-            paramWarnings += "Oboe 缓冲仅 ${"%.1f".format(stats.bufferMs)} ms（目标 ≥4 burst / 20 ms），" +
-                "可能周期性欠载（setBufferSizeInFrames 返回 ${stats.bufferSetResult}）"
+            paramWarnings += "Oboe 缓冲仅 ${"%.1f".format(stats.bufferMs)} ms（${stats.bufferSizeFrames} 帧），" +
+                "而目标水位 ${"%.1f".format(targetWaterMs)} ms —— 缓冲小于水位时会周期性欠载，已尝试自动扩容"
         }
 
         if (stats.bufferSetResult != 0 && stats.bufferSetResult != OBOE_ERROR_UNIMPLEMENTED) {
@@ -693,6 +726,9 @@ class AudioEngineController(
         /** Oboe 缓冲起始 burst 数，以及允许上调到的上限 */
         const val START_BUFFER_BURSTS = 2
         const val MAX_BUFFER_BURSTS = 4
+
+        /** 窗口内新增这么多次欠载就认为缓冲不够（比"回调间隔逼近缓冲"更直接）。 */
+        const val UNDERRUNS_TO_GROW = 3L
 
         /** oboe::Result::ErrorUnimplemented。独占（MMAP）下缓冲由驱动固定时返回，属正常情况。 */
         const val OBOE_ERROR_UNIMPLEMENTED = -898
