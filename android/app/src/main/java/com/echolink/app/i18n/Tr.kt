@@ -197,6 +197,54 @@ object Tr {
         AppLanguage.EN -> "Diagnostic log (Chinese only) — for troubleshooting"
     }
 
+    // ---- 网络停顿（WiFi 热点不稳时的直接证据）----
+
+    fun stallLabel(): String = when (current()) {
+        AppLanguage.ZH_CN -> "网络成串停顿"
+        AppLanguage.ZH_TW -> "網路成串停頓"
+        AppLanguage.JA -> "ネットワークの連続停止"
+        AppLanguage.EN -> "Burst stalls"
+    }
+
+    fun stallValue(events: Long, maxMs: Double): String = when (current()) {
+        AppLanguage.ZH_CN -> "$events 次 / 最长 ${"%.0f".format(maxMs)} ms"
+        AppLanguage.ZH_TW -> "$events 次 / 最長 ${"%.0f".format(maxMs)} ms"
+        AppLanguage.JA -> "$events 回 / 最大 ${"%.0f".format(maxMs)} ms"
+        AppLanguage.EN -> "$events times / max ${"%.0f".format(maxMs)} ms"
+    }
+
+    fun catchUpLabel(): String = when (current()) {
+        AppLanguage.ZH_CN -> "停顿后追赶"
+        AppLanguage.ZH_TW -> "停頓後追趕"
+        AppLanguage.JA -> "停止後の追い上げ"
+        AppLanguage.EN -> "Catch-up bursts"
+    }
+
+    fun catchUpValue(events: Long): String = when (current()) {
+        AppLanguage.ZH_CN -> "$events 次（与停顿成对出现即为链路问题）"
+        AppLanguage.ZH_TW -> "$events 次（與停頓成對出現即為鏈路問題）"
+        AppLanguage.JA -> "$events 回（停止と対で出ればリンク問題）"
+        AppLanguage.EN -> "$events times (paired with stalls = link problem)"
+    }
+
+    /** 成串停顿出现时给的处置建议。 */
+    fun stallAdvice(): String = when (current()) {
+        AppLanguage.ZH_CN ->
+            "检测到网络成串停顿，声音会断续。若在用 WiFi 热点：优先改用 USB 网络共享；" +
+                "若必须用热点，把热点频段从 5 GHz 改成 2.4 GHz（部分网卡的 5 GHz 热点会周期性停顿）。"
+        AppLanguage.ZH_TW ->
+            "偵測到網路成串停頓，聲音會斷續。若在用 WiFi 熱點：優先改用 USB 網路共用；" +
+                "若必須用熱點，把熱點頻段從 5 GHz 改成 2.4 GHz（部分網卡的 5 GHz 熱點會週期性停頓）。"
+        AppLanguage.JA ->
+            "ネットワークの連続停止を検出しました。音が途切れます。WiFi テザリングを使っている場合は、" +
+            "まず USB テザリングに切り替えてください。どうしても WiFi なら 5 GHz → 2.4 GHz に変更してください" +
+            "（一部の無線カードでは 5 GHz のホットスポットが周期的に停止します）。"
+        AppLanguage.EN ->
+            "Burst stalls detected — audio will stutter. On a WiFi hotspot, prefer USB tethering; " +
+                "if you must use WiFi, switch the hotspot from 5 GHz to 2.4 GHz " +
+                "(some adapters' 5 GHz hotspots stall periodically)."
+    }
+
     private val table: Map<String, Triple<String, String, String>> = mapOf(
         // ---- 卡片标题 ----
         "参数核对" to Triple("參數核對", "パラメータ確認", "Parameters"),

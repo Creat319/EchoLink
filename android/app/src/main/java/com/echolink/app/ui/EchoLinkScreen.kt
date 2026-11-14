@@ -515,6 +515,15 @@ private fun NetworkCard(state: ReceiverState) {
         MetricRow("乱序", "${net.packetsOutOfOrder}")
         MetricRow("畸形包", "${net.packetsMalformed}", valueColor = if (net.packetsMalformed > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
         MetricRow("时间线跳变", "${net.sampleCountJumps}", hint = "发送端重启")
+
+        // 成串停顿：WiFi 热点不稳时最直接的证据，抖动直方图看不出来
+        MetricRow(
+            Tr.stallLabel(),
+            Tr.stallValue(net.stallEvents, net.stallMaxMs),
+            valueColor = if (net.stallEvents > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            hint = if (net.stallEvents > 0) Tr.stallAdvice() else null,
+        )
+        MetricRow(Tr.catchUpLabel(), Tr.catchUpValue(net.catchUpEvents))
         MetricRow(
             "最后一包距今",
             if (net.lastArrivalAgeMs == Long.MAX_VALUE) "—" else "${net.lastArrivalAgeMs} ms",

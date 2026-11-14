@@ -29,6 +29,19 @@ data class NetworkSnapshot(
 
     /** 下行电平峰值（0–1），用于半双工压低：扬声器响的时候把上行压下去。 */
     val downlinkPeak: Double = 0.0,
+
+    /**
+     * 成串停顿次数：到达间隔比采集间隔多出超过 [STALL_THRESHOLD_MS] 的次数。
+     * 这是"WiFi 卡顿 / 热点不稳"最直接的证据——抖动直方图看不出来，
+     * 因为一次 200 ms 的卡顿只贡献一个样本，P99 几乎不动。
+     */
+    val stallEvents: Long = 0,
+
+    /** 最大一次停顿（毫秒）。 */
+    val stallMaxMs: Double = 0.0,
+
+    /** 追赶次数：到达间隔明显**小于**采集间隔（停顿后一次性涌来）。与停顿成对出现。 */
+    val catchUpEvents: Long = 0,
 )
 
 /**
@@ -39,6 +52,18 @@ data class NetworkSnapshot(
  * - 每个包计算单跳抖动 d_i = (到达间隔) - (采集时间戳间隔)，喂给 LatencyController；
  * - 每 500 ms 向发送端回一个 40 B 状态回报（丢了也不影响播放）。
  */
+private const val STALL_THRESHOLD_MS = 25L
+private const val CATCH_UP_THRESHOLD_MS = 10L
+
+/** 单跳抖动（到达间隔 − 采集间隔）的分类。抽成纯函数是为了能单测阈值。 */
+internal enum class ArrivalKind { NORMAL, STALL, CATCH_UP }
+
+internal fun classifyArrival(jitterUs: Long): ArrivalKind = when {
+    jitterUs > STALL_THRESHOLD_MS * 1000L -> ArrivalKind.STALL
+    jitterUs < -CATCH_UP_THRESHOLD_MS * 1000L -> ArrivalKind.CATCH_UP
+    else -> ArrivalKind.NORMAL
+}
+
 class UdpReceiver(
     private val port: Int,
     private val externalFrameConsumer: (refFrameIndex: Long, buffer: ByteBuffer, offsetBytes: Int, frames: Int) -> Unit,
@@ -86,6 +111,15 @@ class UdpReceiver(
     /** 下行峰值电平（原始 int16 幅度，0–32768），用于半双工压低。 */
     @Volatile
     private var downlinkPeak = 0.0
+
+    @Volatile
+    private var stallEvents = 0L
+
+    @Volatile
+    private var stallMaxMs = 0.0
+
+    @Volatile
+    private var catchUpEvents = 0L
 
     /**
      * PC 的地址（下行包源地址 = PC 的 47811）。
@@ -236,6 +270,21 @@ class UdpReceiver(
                 val jitter = arrivalDeltaUs - captureDeltaUs
                 onJitterMicros(jitter)
 
+                // 成串停顿 / 追赶：这两个才是"网络卡顿"的直接证据。
+                // 抖动直方图会把一次 200 ms 卡顿摊进 P99 里，几乎看不出来。
+                when (classifyArrival(jitter)) {
+                    ArrivalKind.STALL -> {
+                        stallEvents++
+                        val stallMs = jitter / 1000.0
+                        if (stallMs > stallMaxMs) {
+                            stallMaxMs = stallMs
+                        }
+                    }
+
+                    ArrivalKind.CATCH_UP -> catchUpEvents++
+                    ArrivalKind.NORMAL -> Unit
+                }
+
                 val magnitude = abs(jitter)
                 if (magnitude > jitterMaxUs) {
                     jitterMaxUs = magnitude
@@ -296,6 +345,9 @@ class UdpReceiver(
             senderAddress = (senderAddress as? InetSocketAddress)?.let { "${it.address.hostAddress}:${it.port}" },
             senderRestarts = senderRestarts,
             downlinkPeak = (downlinkPeak / 32768.0).coerceIn(0.0, 1.0),
+            stallEvents = stallEvents,
+            stallMaxMs = stallMaxMs,
+            catchUpEvents = catchUpEvents,
         )
     }
 
