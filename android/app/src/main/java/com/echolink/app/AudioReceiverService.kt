@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.echolink.app.audio.AudioEngineController
+import com.echolink.app.i18n.Tr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -63,7 +64,7 @@ class AudioReceiverService : Service() {
 
             ACTION_CONFIRM_NOT_HEARD -> controller.confirmBeep(false)
 
-            ACTION_REOPEN -> controller.requestReopen("用户手动要求重开")
+            ACTION_REOPEN -> controller.requestReopen(Tr.actionReopen())
         }
 
         return START_STICKY
@@ -139,11 +140,11 @@ class AudioReceiverService : Service() {
         )
 
         val detail = when (state.phase) {
-            LinkPhase.STREAMING -> "水位 ${"%.1f".format(state.engine.waterMs)} ms / 目标 ${"%.1f".format(state.targetWaterMs)} ms · 欠载 ${state.engine.underrunEvents}"
-            LinkPhase.LISTENING -> "等待 PC 数据（端口 ${state.settings.port}）"
-            LinkPhase.REOPENING -> "正在重开音频流…"
-            LinkPhase.FAULT -> state.lastReopenReason ?: "音频流故障"
-            LinkPhase.STOPPED -> "已停止"
+            LinkPhase.STREAMING -> Tr.notifDetail("%.1f".format(state.engine.waterMs), "%.1f".format(state.targetWaterMs), state.engine.underrunEvents)
+            LinkPhase.LISTENING -> Tr.notifWaiting(state.settings.port)
+            LinkPhase.REOPENING -> Tr.notifReopening()
+            LinkPhase.FAULT -> Tr.notifFault(state.lastReopenReason)
+            LinkPhase.STOPPED -> Tr.t("已停止")
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -153,7 +154,7 @@ class AudioReceiverService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openApp)
-            .addAction(android.R.drawable.ic_media_pause, "停止", stopIntent)
+            .addAction(android.R.drawable.ic_media_pause, Tr.actionStop(), stopIntent)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
@@ -165,10 +166,10 @@ class AudioReceiverService : Service() {
 
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "音频播放",
+            Tr.notifChannelPlayback(),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "EchoLink 接收端播放状态"
+            description = Tr.notifChannelDescription()
             setShowBadge(false)
         }
 
