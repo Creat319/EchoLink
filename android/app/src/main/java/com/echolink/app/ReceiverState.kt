@@ -40,6 +40,12 @@ data class ReceiverState(
     val settings: ReceiverSettings = ReceiverSettings(),
     val targetWaterMs: Double = 30.0,
     val waterMinMs: Double = 0.0,
+
+    /** 最近 1 秒窗口的平均水位（与 waterMinMs 同口径、同批样本）。 */
+    val waterAvgMs: Double = 0.0,
+
+    /** 回调入口水位的历史最低（原生累计口径）。 */
+    val waterSessionMinMs: Double = 0.0,
     val jitterP99Ms: Double = 0.0,
     val jitterP50Ms: Double = 0.0,
     val controlWarm: Boolean = false,

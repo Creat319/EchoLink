@@ -75,6 +75,8 @@ class AudioEngineController(
 
     private var targetWaterMs = 30.0
     private var waterMinMs = 0.0
+    private var waterAvgMs = 0.0
+    private var waterSessionMinMs = 0.0
     private var jitterP99Ms = 0.0
     private var jitterP50Ms = 0.0
     private var controlWarm = false
@@ -232,6 +234,12 @@ class AudioEngineController(
         }
 
         val windowMinMs = waterMinWindow.min()
+        // 「平均」必须是同一批样本的平均，不能拿瞬时值冒充——
+        // 之前 waterAvgMs 传的是 stats.waterMs（瞬时），于是 UI 上出现过
+        // 「最小值 37.0 ms > 平均值 36.7 ms」这种不可能的数字。
+        val windowAvgMs = if (waterMinWindow.isEmpty()) 0.0 else waterMinWindow.average()
+        // 回调入口水位的历史最低（原生累计口径）：这是判断"读端到底见过多干"的唯一可靠值
+        val sessionMinMs = stats.waterAtCallbackMinFrames / 48.0
         val nowMs = SystemClock.elapsedRealtime()
 
         // 目标水位模式允许运行中热切换；端口/独占模式需要重开流，只在 start 时读取
@@ -240,7 +248,7 @@ class AudioEngineController(
 
         val decision = latency.update(
             waterMinMs = windowMinMs,
-            waterAvgMs = stats.waterMs,
+            waterAvgMs = windowAvgMs,
             underrunDelta = underrunDelta,
             framesPerBurst = stats.framesPerBurst,
             bufferMs = stats.bufferMs,
@@ -255,6 +263,8 @@ class AudioEngineController(
         jitterP99Ms = decision.jitterP99Ms
         jitterP50Ms = decision.jitterP50Ms
         waterMinMs = windowMinMs
+        waterAvgMs = windowAvgMs
+        waterSessionMinMs = sessionMinMs
         controlWarm = stats.prefillFrames > 0 && !stats.prefillActive
 
         if (underrunDelta > 0) {
@@ -520,6 +530,8 @@ class AudioEngineController(
                 settings = EchoLinkStateHolder.liveSettings,
                 targetWaterMs = targetWaterMs,
                 waterMinMs = waterMinMs,
+                waterAvgMs = waterAvgMs,
+                waterSessionMinMs = waterSessionMinMs,
                 jitterP99Ms = jitterP99Ms,
                 jitterP50Ms = jitterP50Ms,
                 controlWarm = controlWarm,

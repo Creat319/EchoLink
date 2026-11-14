@@ -42,6 +42,27 @@ public static class EnginePeriodProbe
 {
     private const int RpcEChangedMode = unchecked((int)0x80010106);
 
+    /// <summary>
+    /// 探测当前**系统默认**渲染端点。
+    /// 界面上默认选的是"系统默认输出"这个伪设备（Id 为 null），
+    /// 要跟真实端点比较，必须先把默认端点解析出来。
+    /// </summary>
+    public static (EndpointPeriods Periods, string Name)? ProbeDefaultRender()
+    {
+        try
+        {
+            using var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();
+            var device = enumerator.GetDefaultAudioEndpoint(
+                NAudio.CoreAudioApi.DataFlow.Render,
+                NAudio.CoreAudioApi.Role.Multimedia);
+            return (Probe(device.ID, device.FriendlyName), device.FriendlyName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static EndpointPeriods Probe(string deviceId, string friendlyName)
     {
         var coInitialized = false;

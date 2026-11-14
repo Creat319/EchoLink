@@ -503,6 +503,17 @@ int32_t AudioEngine::readFrames(int16_t* out, int32_t frames) {
     double pos = _readPos;
     int32_t produced = 0;
 
+    // 回调入口水位：这是"读端此刻手上还有多少料"的唯一可靠口径。
+    // 记录下来才能和"欠载时到底水位多少"对账——之前 UI 上的 min/avg 口径不一致，
+    // 出现过"最小值 37.0 ms > 平均值 36.7 ms"这种不可能的数字。
+    {
+        const int64_t levelAtEntry = static_cast<int64_t>(writeHead) - static_cast<int64_t>(_readPos);
+        int64_t prev = _waterAtCallbackMin.load(std::memory_order_relaxed);
+        while (levelAtEntry < prev &&
+               !_waterAtCallbackMin.compare_exchange_weak(prev, levelAtEntry, std::memory_order_relaxed)) {
+        }
+    }
+
     for (; produced < frames; ++produced) {
         const int64_t index = static_cast<int64_t>(std::floor(pos));
         // 三次插值需要 index-1 .. index+2 四个点，且必须是已经写进来的数据
@@ -539,6 +550,8 @@ int32_t AudioEngine::readFrames(int16_t* out, int32_t frames) {
         std::memset(out + produced * 2, 0, static_cast<size_t>(frames - produced) * 2 * sizeof(int16_t));
         _underrunEvents.fetch_add(1, std::memory_order_relaxed);
         _underrunFrames.fetch_add(static_cast<uint64_t>(frames - produced), std::memory_order_relaxed);
+        // 读端饥饿单独计数：这是**应用自己的环**没料，与 AAudio 的硬件 xrun 是两回事
+        _readStarveFrames.fetch_add(static_cast<uint64_t>(frames - produced), std::memory_order_relaxed);
     }
 
     _readPos = pos;
@@ -732,6 +745,27 @@ void AudioEngine::fillStats(double* out, int32_t length) {
     out[kMMapSupported] = _mmapSupported.load(std::memory_order_relaxed);
     out[kMMapEnabled] = _mmapEnabled.load(std::memory_order_relaxed);
     out[kMMapUsed] = _mmapUsed.load(std::memory_order_relaxed);
+
+    // ---- 统计口径拆分（见 CHANGELOG v0.4.4）----
+    // 硬件侧 xrun：AAudio 自己统计，和"我们的环读不到数据"是不同事件。
+    // 抓取后立刻写入，避免在控制线程上反复调用。
+    {
+        int32_t xruns = -1;
+        std::lock_guard<std::mutex> lock(_controlMutex);
+        if (_stream) {
+            const oboe::ResultWithValue<int32_t> result = _stream->getXRunCount();
+            if (result) {
+                xruns = result.value();
+            }
+        }
+        out[kXRunCount] = static_cast<double>(xruns);
+    }
+
+    out[kReadStarveFrames] = static_cast<double>(_readStarveFrames.load(std::memory_order_relaxed));
+
+    // 回调入口水位的最小值：累计值（不做读后重置），作为 UI「历史最低」的唯一口径
+    const int64_t entryMin = _waterAtCallbackMin.load(std::memory_order_relaxed);
+    out[kWaterAtCallbackMin] = entryMin == INT64_MAX ? static_cast<double>(water) : static_cast<double>(entryMin);
 }
 
 }  // namespace echolink

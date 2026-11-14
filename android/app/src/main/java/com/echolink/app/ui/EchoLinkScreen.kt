@@ -398,7 +398,7 @@ private fun WaterCard(state: ReceiverState) {
         )
         Spacer(Modifier.height(8.dp))
         MetricRow(
-            "水位最低值",
+            "水位最低值（1 s 窗口）",
             String.format(Locale.US, "%.2f ms", state.waterMinMs),
             valueColor = if (state.waterMinMs < state.targetWaterMs * 0.6 && state.targetWaterMs > 0) {
                 MaterialTheme.colorScheme.error
@@ -406,6 +406,18 @@ private fun WaterCard(state: ReceiverState) {
                 MaterialTheme.colorScheme.onSurface
             },
             hint = "闭环控制量",
+        )
+        // 同窗口的平均值：与上面的最小值严格同批样本，不会再出现 min > avg
+        MetricRow(
+            "水位平均值（1 s 窗口）",
+            String.format(Locale.US, "%.2f ms", state.waterAvgMs),
+            hint = "与上一行同批样本",
+        )
+        // 回调入口水位的历史最低：原生累计口径，是"读端到底见过多干"的可靠值
+        MetricRow(
+            "水位历史最低（回调入口）",
+            String.format(Locale.US, "%.2f ms", state.waterSessionMinMs),
+            hint = "原生累计，不会重置",
         )
         MetricRow("当前水位", String.format(Locale.US, "%.2f ms", state.engine.waterMs))
         MetricRow("目标（低谷）", String.format(Locale.US, "%.2f ms", state.targetWaterMs))
@@ -515,6 +527,18 @@ private fun StabilityCard(state: ReceiverState) {
     SectionCard(title = LocalStrings.current.sectionStability, accent = MaterialTheme.colorScheme.error) {
         MetricRow("欠载次数", "${e.underrunEvents}", valueColor = if (e.underrunEvents > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
         MetricRow("欠载补静音", "${e.underrunFrames} 帧")
+        // 两个不同事件必须分开看：读端饥饿是"我们的环没料"（多半是网络洞），
+        // xrun 是"回调没赶上"（调度问题）。混在一起会误判因果。
+        MetricRow(
+            "├ 读端饥饿",
+            "${e.readStarveFrames} 帧",
+            hint = "环里没数据，多半是网络成串丢包",
+        )
+        MetricRow(
+            "└ 硬件 xrun",
+            if (e.xRunCount < 0) "不可用" else "${e.xRunCount} 次",
+            hint = if (e.xRunCount < 0) "本设备未提供 getXRunCount" else "回调迟到，调度问题",
+        )
         MetricRow("启动垫水位", "${e.prefillFrames} 帧", hint = "不计欠载")
         MetricRow("积压丢帧", "${e.dropEvents} 次 / ${e.dropFrames} 帧")
         MetricRow("缺包补静音", "${e.silenceFilledFrames} 帧")

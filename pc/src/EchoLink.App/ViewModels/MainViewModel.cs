@@ -386,6 +386,115 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ---- 端点周期探测：低延迟提示 ----
+
+    /// <summary>
+    /// 关于"换一个更快端点"的提示。
+    ///
+    /// 不做自动切换：**最快周期的端点往往不是音乐正在播放的设备**，
+    /// 自动切过去只会变成静音。这里只把事实摆出来，让用户自己决定要不要把默认输出挪过去。
+    /// </summary>
+    public string FastEndpointHint
+    {
+        get => _fastEndpointHint;
+        private set
+        {
+            if (Set(ref _fastEndpointHint, value))
+            {
+                // 可见性绑定在这个派生属性上，必须一起通知，否则文字设了但界面不显示
+                OnPropertyChanged(nameof(HasFastEndpointHint));
+            }
+        }
+    }
+
+    public bool HasFastEndpointHint => !string.IsNullOrEmpty(_fastEndpointHint);
+
+    /// <summary>后台探测所有渲染端点的最小周期，算出"还能省多少毫秒"。</summary>
+    private async Task ProbeEndpointPeriodsAsync()
+    {
+        AppendLog("[端点] 开始探测各端点最小周期…");
+        var snapshot = await Task.Run(() =>
+        {
+            var results = new List<(Core.Wasapi.EndpointPeriods Periods, bool IsCurrent)>();
+            foreach (var device in Devices.ToList())
+            {
+                if (device.Id is null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var periods = Core.Wasapi.EnginePeriodProbe.Probe(device.Id, device.Name);
+                    results.Add((periods, device.Id == _selectedDevice?.Id));
+                }
+                catch
+                {
+                    // 单个端点探测失败不影响其它
+                }
+            }
+
+            return results;
+        }).ConfigureAwait(true);
+
+        AppendLog($"[端点] 探测完成：{snapshot.Count} 个端点");
+        if (snapshot.Count == 0)
+        {
+            return;
+        }
+
+        // 推荐时排除虚拟声卡：把默认输出切到 VB-Cable 只会让电脑彻底没声音，
+        // 那不是"更快的端点"，而是"把音频送进了黑洞"。
+        static bool IsVirtual(string name)
+        {
+            var text = name.ToLowerInvariant();
+            return text.Contains("cable") || text.Contains("vb-audio") || text.Contains("virtual")
+                   || text.Contains("voicemeeter") || name.Contains("虚拟");
+        }
+
+        var hardware = snapshot.Where(x => !IsVirtual(x.Periods.FriendlyName)).ToList();
+        if (hardware.Count == 0)
+        {
+            FastEndpointHint = string.Empty;
+            return;
+        }
+
+        var current = snapshot.FirstOrDefault(x => x.IsCurrent);
+        if (current.Periods is null)
+        {
+            // 界面选的是"系统默认输出"（Id 为 null）时，解析出真实的默认端点再比
+            var fallback = Core.Wasapi.EnginePeriodProbe.ProbeDefaultRender();
+            if (fallback is { } fb)
+            {
+                current = (fb.Periods, true);
+                AppendLog($"[端点] 当前为系统默认输出，解析到：{fb.Name}");
+            }
+        }
+        var best = hardware.OrderBy(x => x.Periods.MinMs).First();
+
+        if (current.Periods is null || current.Periods.MinMs <= 0)
+        {
+            AppendLog("[端点] 当前端点没有探测结果，跳过比较");
+            return;
+        }
+
+        var currentMs = current.Periods.MinMs;
+        var bestMs = best.Periods.MinMs;
+
+        // 差距不到 3 ms 就不值得打扰用户
+        if (bestMs <= 0 || currentMs - bestMs < 3.0)
+        {
+            FastEndpointHint = string.Empty;
+            return;
+        }
+
+        FastEndpointHint =
+            $"当前端点抓取粒度 {currentMs:F2} ms；「{best.Periods.FriendlyName}」可到 {bestMs:F2} ms，" +
+            $"抓取粒度可再降 {currentMs - bestMs:F1} ms（端到端通常还更多：实测两种端点差过 17 ms）。" +
+            "要用它需把 Windows 默认输出切到该设备。";
+        AppendLog("[端点] " + FastEndpointHint);
+    }
+
     /// <summary>没有新版本时显示检查结果；有新版本时换成下载链接，两者互斥。</summary>
     public bool HasNoUpdate => !_hasUpdate;
 
@@ -707,6 +816,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _updateLinkText = string.Empty;
     private bool _hasUpdate;
     private int _selectedPageIndex;
+    private string _fastEndpointHint = string.Empty;
 
     /// <summary>版本号（来自 Directory.Build.props 的 &lt;Version&gt;），显示在标题右侧便于排查版本不符。</summary>
     public string AppVersionText { get; } = "v" + MainViewModel.LocalVersion;
@@ -998,6 +1108,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         SelectedDevice = Devices.FirstOrDefault(d => d.Id == previousId) ?? defaultItem;
+
+        // 设备列表就绪后，后台探测一遍各端点能到的最小周期（换端点最多能省 17 ms）
+        _ = ProbeEndpointPeriodsAsync();
 
         // 上行默认挑虚拟声卡的渲染侧（VB-Cable 的 CABLE Input 之类）。
         // 名字里带 cable / virtual / 入梦 的都算候选。

@@ -188,6 +188,15 @@
                             <controls:MetricRow Label="抓取缓冲" Value="{Binding BufferText}" />
                             <controls:MetricRow Label="每回调帧数" Value="{Binding FramesPerCallbackText}" />
                             <controls:MetricRow Label="保活流" Value="{Binding KeepAliveModeText}" />
+
+                            <!-- 端点周期探测：换端点最多能省 17 ms，但不自动切换（快速端点往往不是正在出声的设备） -->
+                            <TextBlock Text="{Binding FastEndpointHint}"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Margin="0,6,0,0"
+                                       Opacity="0.75"
+                                       Foreground="{StaticResource BrandGreen}"
+                                       Visibility="{Binding HasFastEndpointHint, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
 

@@ -53,7 +53,10 @@ enum StatsIndex : int {
     kMMapSupported = 37,       // 1 = 设备支持 MMAP（isMMapSupported）
     kMMapEnabled = 38,         // 1 = 本应用允许走 MMAP（isMMapEnabled）
     kMMapUsed = 39,            // 1 = 实际打开的流走了 MMAP（isMMapUsed）
-    kStatsCount = 40,          // 固定 40：Kotlin 侧 DoubleArray(40)，两侧必须一致
+    kXRunCount = 40,           // AAudio 自己统计的硬件侧 xrun（getXRunCount，-1 = 不可用）
+    kReadStarveFrames = 41,    // 读端取不到数据而补静音的帧数（与 xrun 分开计数）
+    kWaterAtCallbackMin = 42,  // 回调入口水位的最小值（ms 口径由 Kotlin 换算），用于对账
+    kStatsCount = 43,          // 固定 43：Kotlin 侧 DoubleArray(43)，两侧必须一致
 };
 
 class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
@@ -142,6 +145,8 @@ private:
     std::atomic<uint64_t> _resyncEvents{0};
     std::atomic<uint64_t> _overflowDrops{0};
     std::atomic<uint64_t> _callbackCount{0};
+    std::atomic<uint64_t> _readStarveFrames{0};      // 读端饥饿补静音的帧数
+    std::atomic<int64_t> _waterAtCallbackMin{INT64_MAX}; // 回调入口水位最小值（帧）
     std::atomic<uint64_t> _streamGeneration{0};
     std::atomic<int32_t> _errorFlag{0};
     std::atomic<int32_t> _lastErrorCode{0};

@@ -146,7 +146,17 @@ object StatsIndex {
     const val MMAP_SUPPORTED = 37
     const val MMAP_ENABLED = 38
     const val MMAP_USED = 39
-    const val COUNT = 40
+
+    /** AAudio 统计的硬件侧 xrun（-1 = 该 API 不可用）。与读端饥饿是不同事件。 */
+    const val XRUN_COUNT = 40
+
+    /** 读端取不到数据而补静音的帧数（我们自己的环没料）。 */
+    const val READ_STARVE_FRAMES = 41
+
+    /** 回调入口水位的历史最小值（帧，累计不重置）。 */
+    const val WATER_AT_CALLBACK_MIN = 42
+
+    const val COUNT = 43
 }
 
 /** 一次 native 统计快照。</summary> */
@@ -187,6 +197,13 @@ data class EngineStats(
     val waterMinFrames: Long,
     val maxCallbackFrames: Int,
     val prefillActive: Boolean,
+
+    /** 硬件侧 xrun 次数（AAudio getXRunCount）；-1 = 该 API 不可用。 */
+    val xRunCount: Int,
+    /** 读端饥饿补静音的帧数（我们自己的环没料，与硬件 xrun 区分）。 */
+    val readStarveFrames: Long,
+    /** 回调入口水位的历史最小值（帧，累计不重置）。 */
+    val waterAtCallbackMinFrames: Double,
     /** 区间内"调度型"回调间隔峰值（已剔除开流停顿与 >100 ms 的流级空档），决定 Oboe 缓冲够不够。 */
     val schedGapMaxMs: Double,
     /** 设备是否支持 MMAP（来自 OboeExtensions::isMMapSupported）。 */
@@ -203,8 +220,7 @@ data class EngineStats(
     val waterMinMs: Double get() = waterMinFrames * 1000.0 / Protocol.SAMPLE_RATE
 
     /** Oboe 内部缓冲的实际时长：必须能跨过 PC 端 10 ms 的成批发包间隔。 */
-    val bufferMs: Double
-        get() = if (sampleRate > 0) bufferSizeFrames * 1000.0 / sampleRate else 0.0
+    val bufferMs: Double get() = if (sampleRate > 0) bufferSizeFrames * 1000.0 / sampleRate else 0.0
 
     /** 独占请求了但没拿到时，返回失败码文案；拿到了返回 null。 */
     val exclusiveFailureText: String?
@@ -259,6 +275,9 @@ data class EngineStats(
             mmapSupported = false,
             mmapEnabled = false,
             mmapUsed = false,
+            xRunCount = -1,
+            readStarveFrames = 0,
+            waterAtCallbackMinFrames = 0.0,
         )
 
         fun from(values: DoubleArray): EngineStats = EngineStats(
@@ -302,6 +321,9 @@ data class EngineStats(
             mmapSupported = values[StatsIndex.MMAP_SUPPORTED].toInt() != 0,
             mmapEnabled = values[StatsIndex.MMAP_ENABLED].toInt() != 0,
             mmapUsed = values[StatsIndex.MMAP_USED].toInt() != 0,
+            xRunCount = values[StatsIndex.XRUN_COUNT].toInt(),
+            readStarveFrames = values[StatsIndex.READ_STARVE_FRAMES].toLong(),
+            waterAtCallbackMinFrames = values[StatsIndex.WATER_AT_CALLBACK_MIN],
         )
     }
 }
