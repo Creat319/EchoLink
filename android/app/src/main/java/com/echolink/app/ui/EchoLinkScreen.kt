@@ -1,11 +1,13 @@
 package com.echolink.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -151,24 +153,16 @@ fun EchoLinkApp(
                 )
             },
             bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    NavigationBarItem(
-                        selected = tab == 0,
-                        onClick = { tab = 0 },
-                        icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                        label = { Text(strings.tabHome) },
-                    )
-                    NavigationBarItem(
-                        selected = tab == 1,
-                        onClick = { tab = 1 },
-                        icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                        label = { Text(strings.tabSettings) },
-                    )
-                    NavigationBarItem(
-                        selected = tab == 2,
-                        onClick = { tab = 2 },
-                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                        label = { Text(strings.tabLog) },
+                // 浮动液态玻璃导航条（视觉复刻，说明见 LiquidGlass.kt）
+                Box(Modifier.navigationBarsPadding()) {
+                    LiquidGlassNavBar(
+                        items = listOf(
+                            GlassNavItem(Icons.Filled.Home, strings.tabHome),
+                            GlassNavItem(Icons.Filled.Settings, strings.tabSettings),
+                            GlassNavItem(Icons.AutoMirrored.Filled.List, strings.tabLog),
+                        ),
+                        selectedIndex = tab,
+                        onSelect = { tab = it },
                     )
                 }
             },

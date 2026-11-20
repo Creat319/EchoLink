@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.echolink.app.i18n.Tr
 import androidx.compose.ui.unit.sp
@@ -36,12 +38,31 @@ fun SectionCard(
     accent: Color? = null,
     content: @Composable () -> Unit,
 ) {
+    val shape = RoundedCornerShape(18.dp)
+    val surface = MaterialTheme.colorScheme.surface
+
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = shape,
     ) {
-        Column(Modifier.padding(14.dp)) {
+        // 玻璃质感的卡片：半透明渐变 + 顶部亮边（视觉复刻，见 LiquidGlass.kt）
+        Column(
+            Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(surface.copy(alpha = 0.92f), surface.copy(alpha = 0.74f)),
+                    ),
+                )
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.02f)),
+                    ),
+                    shape,
+                )
+                .padding(14.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (accent != null) {
                     Box(
