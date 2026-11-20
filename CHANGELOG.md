@@ -5,7 +5,59 @@
 
 ---
 
-## v0.5.0
+## v0.6.0
+
+**界面换成 Flutter**，音频链路一行没动。这是"只换 UI 层"的迁移，不是重写整个客户端。
+
+### 为什么这样切
+
+| 方案 | 代价 |
+| --- | --- |
+| 全量迁移（连 UDP/控制环一起搬） | 5,419 行 Kotlin 重写 + 整条音频链在真机重验，且我无设备 |
+| **只换 UI（本次）** | 约 2,000 行界面重写；**播放路径零风险** |
+
+C++ 引擎（1,102 行）本来就和框架无关；Kotlin 的服务、协议、控制环原样保留。
+Flutter 只做两件事：订阅状态（EventChannel）、下命令（MethodChannel）。
+
+### 新增
+
+- `flutter_ui/`：Flutter module（add-to-app），内含手写版液态玻璃 dock 与三页界面
+- `bridge/StateJson.kt`：把 Kotlin 状态序列化成 JSON（音频链路仍在原生侧）
+- `bridge/EchoLinkBridge.kt`：MethodChannel + EventChannel，5 Hz 推状态
+- `FlutterUiActivity`：Flutter 宿主，注册通道；原 Compose `MainActivity` 保留为回退入口
+
+### 踩过的坑（都已解决，记下来免得再踩）
+
+1. **`package:flutter/material.dart` 在 3.50 已废弃**，官方改用 `package:material_ui/material_ui.dart`
+2. **Flutter 3.50 要求 Gradle ≥ 9.3.1**，本工程是 8.14 → 用 `-PskipDependencyChecks=true` 跳过校验
+3. **dl.google.com 国内超时** → 用阿里云镜像；必须**清空后重建**仓库列表，只 append 无效
+4. **引擎产物仓库也被镜像清掉了** → 补 `storage.flutter-io.cn/download.flutter.io`
+5. **手动接线漏了 flutter_assets** → APK 里没有 Dart 资源会白屏；在宿主 sourceSets 里显式
+   并入 `.../intermediates/flutter/debug`（注意：要指**父目录**，否则 `flutter_assets` 这层
+   目录名会丢，引擎找不到 kernel_blob.bin）
+6. 资源合并要显式 `dependsOn(":flutter:compileFlutterBuildDebug")`，否则 Gradle 报"未声明依赖"
+
+### 现状与限制
+
+- 这次是 **debug APK，162 MB**：debug 引擎（每个 ABI 38 MB 的 libflutter.so）+ 未优化 + 三 ABI。
+  **不能直接分发**，release 构建需要签名并且体积会小很多（预计 30–40 MB）。
+- **手机上没跑过**：本机无模拟器、`adb devices` 为空。装上去是否能正常显示，需要你验证。
+- 一语言切换、引导页、更新弹窗**还没迁到 Flutter**；本轮先打通"能显示真实状态"。
+
+### 构建方式变化
+
+```powershell
+# Flutter SDK 需 ≥ 3.47（prism_ui 要求），本次用 3.50.1
+$env:FLUTTER_STORAGE_BASE_URL = "https://storage.flutter-io.cn"
+cd android
+.\gradlew.bat :app:assembleDebug -PskipDependencyChecks=true
+```
+
+> 依赖镜像写在 `~/.gradle/init.gradle`（本机全局，不入库），说明见该文件注释。
+
+---
+
+
 
 安卓端界面重做：底部换成**浮动液态玻璃导航条**，卡片也做了玻璃化处理。
 
@@ -43,6 +95,12 @@
 能保证的只有编译通过 + 74 项单测通过。好不好看必须你看了才知道。
 
 ---
+
+## v0.5.0
+
+安卓端界面重做：底部换成**浮动液态玻璃导航条**，卡片也做了玻璃化处理。
+参数取自 FlClash / prism_ui 的 `LiquidGlassStyle.pill`（深色分支）；原实现是 GLSL
+着色器，Compose 无法复刻，这里做的是视觉近似。详见 git 历史。
 
 ## v0.4.6
 

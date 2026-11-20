@@ -28,16 +28,25 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.EchoLink">
 
+        <!-- 界面由 Flutter 负责；MainActivity 保留作回退入口（不再导出） -->
         <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:name=".FlutterUiActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode|density|fontScale|locale|layoutDirection"
             android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.EchoLink">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:exported="false"
+            android:theme="@style/Theme.EchoLink" />
 
         <service
             android:name=".AudioReceiverService"

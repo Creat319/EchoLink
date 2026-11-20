@@ -36,3 +36,12 @@ Thumbs.db
 
 # 第三方参考项目（仅用于比对 UI，不并入本仓库）
 /FlClash-main/
+# Flutter module（源码入库，构建产物不入库）
+/flutter_ui/.dart_tool/
+/flutter_ui/build/
+/flutter_ui/.android/Flutter/build/
+/flutter_ui/.android/build/
+/flutter_ui/.android/.gradle/
+/flutter_ui/.android/local.properties
+/flutter_ui/.idea/
+/flutter_ui/*.iml

@@ -5,6 +5,23 @@ plugins {
 }
 
 android {
+    // Flutter 引擎的 Dart 资源（debug 是 kernel_blob.bin，release 是 libapp.so 旁边的产物）。
+    // add-to-app 正常由 include_flutter.groovy 自动接上；本工程手动接线，需要在宿主里
+    // 显式把模块的 flutter_assets 目录并进来，否则装上去是白屏（APK 里没有 flutter_assets）。
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(
+                rootProject.projectDir.parentFile.resolve(
+                    "flutter_ui/.android/Flutter/build/intermediates/flutter/debug",
+                ),
+            )
+            assets.srcDir(
+                rootProject.projectDir.parentFile.resolve(
+                    "flutter_ui/.android/Flutter/build/intermediates/flutter/release",
+                ),
+            )
+        }
+    }
     namespace = "com.echolink.app"
     compileSdk = 35
     ndkVersion = "28.2.13676358"
@@ -13,8 +30,8 @@ android {
         applicationId = "com.echolink.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.5.0"
+        versionCode = 19
+        versionName = "0.6.0"
 
         // 四种 ABI 全打：
         // - arm64-v8a：主流手机（性能最好，Oboe 低延迟路径最完整）
@@ -85,6 +102,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
+    // Flutter UI（add-to-app）：界面用 Flutter 画，音频链路仍在 Kotlin/C++ 侧
+    implementation(project(":flutter"))
+
     // Oboe 通过 prefab 提供 CMake 里的 oboe::oboe 目标
     implementation("com.google.oboe:oboe:1.9.3")
 
@@ -93,4 +113,10 @@ dependencies {
     // 想在 JVM 上真正验证 JSON 解析，必须引入官方实现。
     testImplementation("org.json:json:20240303")
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+// 让资源合并显式依赖 Flutter 的编译任务，否则 Gradle 会报
+// "uses this output ... without declaring an explicit or implicit dependency"。
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(":flutter:compileFlutterBuildDebug")
 }
