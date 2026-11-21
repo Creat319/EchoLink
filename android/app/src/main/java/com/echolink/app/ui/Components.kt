@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import com.echolink.app.i18n.Tr
 import androidx.compose.ui.unit.sp
@@ -186,5 +188,42 @@ fun WaterSparkline(
             color = MaterialTheme.colorScheme.outline,
             fontSize = 10.sp,
         )
+    }
+}
+/**
+ * 带说明文字的开关行。
+ *
+ * 设置页里那些"改了会发生什么"的选项都用它：标题 + 一行解释 + 开关。
+ * 解释文字比标题重要得多——比如「关闭后就没有回声消除了」这种后果，
+ * 只写标题用户根本不知道自己关掉的是什么。
+ */
+@Composable
+fun ToggleRow(
+    label: String,
+    hint: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.45f)
+            .padding(vertical = 4.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = Tr.t(label),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = Tr.t(hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }

@@ -141,6 +141,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             ConfigureMic();
         }
+        else
+        {
+            // 没开麦克风时也要探一下虚拟声卡在不在，否则卡片会对着已装好 VB-Cable
+            // 的机器显示"需要安装虚拟声卡"——那是纯误导。
+            // 只设标志，不自动选中端点（用户没启用，不该改他的输出设备）。
+            HasVirtualMic = VirtualMicLocator.LocateBest() is { Usable: true };
+        }
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
         _timer.Tick += (_, _) => RefreshSnapshot();

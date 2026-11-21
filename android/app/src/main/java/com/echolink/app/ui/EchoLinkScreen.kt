@@ -647,6 +647,42 @@ private fun SettingsCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+
+            if (state.settings.micEnabled) {
+                // 采集链路与平台音频处理。改任意一项都会重开麦克风（平台 effect 绑在会话上）。
+                ToggleRow(
+                    label = "语音链路（VOICE_COMMUNICATION）",
+                    hint = "关闭后拿到原始信号，但也就没有回声消除了",
+                    checked = state.settings.micVoiceMode,
+                    enabled = true,
+                    onChange = { onSettingsChange(state.settings.copy(micVoiceMode = it)) },
+                )
+                ToggleRow(
+                    label = "回声消除（AEC）",
+                    hint = if (state.settings.micVoiceMode) {
+                        "消除手机扬声器放出来的回声；生效后不再压低你的声音"
+                    } else {
+                        "需要先打开语音链路"
+                    },
+                    checked = state.settings.micAec && state.settings.micVoiceMode,
+                    enabled = state.settings.micVoiceMode,
+                    onChange = { onSettingsChange(state.settings.copy(micAec = it)) },
+                )
+                ToggleRow(
+                    label = "降噪（NS）",
+                    hint = "压掉稳定底噪，对风扇声、电流声有效",
+                    checked = state.settings.micNs,
+                    enabled = true,
+                    onChange = { onSettingsChange(state.settings.copy(micNs = it)) },
+                )
+                ToggleRow(
+                    label = "自动增益（AGC）",
+                    hint = "默认关闭：它会把底噪一起抬起来",
+                    checked = state.settings.micAgc,
+                    enabled = true,
+                    onChange = { onSettingsChange(state.settings.copy(micAgc = it)) },
+                )
+            }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {

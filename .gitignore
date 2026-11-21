@@ -36,3 +36,6 @@ Thumbs.db
 
 # 第三方参考项目（仅用于比对 UI，不并入本仓库）
 /FlClash-main/
+
+# 第三方参考项目（仅用于比对逻辑，不并入本仓库）
+/MicYou-master/

@@ -38,6 +38,10 @@ public static class VirtualMicLocator
     /// <summary>常见的虚拟声卡名字特征，命中越多分越高。</summary>
     private static readonly (string Token, int Score, string Reason)[] NameHints =
     {
+        // Steam 自带 Steam Streaming Microphone（装了 Steam 就有，不必额外装 VB-Cable）。
+        // 名字分靠前，但能否用仍取决于能不能配到录音端点；LocateBest 只认 Usable 的候选，
+        // 配不上会自动退回 VB-Cable，所以加这条不会把原本能用的配置弄坏。
+        ("steam streaming microphone", 110, "Steam Streaming Microphone"),
         ("cable input", 100, "VB-Cable 输入"),
         ("cable", 90, "VB-Cable"),
         ("vb-audio", 80, "VB-Audio"),

@@ -167,9 +167,21 @@ class AudioEngineController(
 
     fun updateSettings(newSettings: ReceiverSettings) {
         val portChanged = newSettings.port != settings.port && receiver != null
+        val micProcessingChanged = newSettings.micVoiceMode != settings.micVoiceMode ||
+            newSettings.micAec != settings.micAec ||
+            newSettings.micNs != settings.micNs ||
+            newSettings.micAgc != settings.micAgc
         settings = newSettings
+
         if (portChanged) {
             log("端口变更需要重启接收：请先停止再启动")
+        }
+
+        if (micProcessingChanged && micUplink != null) {
+            // 平台音频处理只能在采集会话上重建，所以改了就重开一次麦克风
+            log("麦克风处理参数变更，正在重新打开采集…")
+            stopMic()
+            startMic()
         }
     }
 
@@ -658,11 +670,22 @@ class AudioEngineController(
         val uplink = MicUplink(
             targetProvider = { receiver?.serverEndpoint() },
             onLog = { log(it) },
+            processing = MicProcessing(
+                voiceMode = settings.micVoiceMode,
+                aec = settings.micAec,
+                ns = settings.micNs,
+                agc = settings.micAgc,
+            ),
         )
 
         if (uplink.start()) {
             micUplink = uplink
-            log("上行麦克风已开启（P1 半双工：下行响时自动压低），PC 端请选虚拟麦克风")
+            val ducking = if (uplink.aecActive) {
+                "已启用回声消除（不再压低你的声音，可以随时插话）"
+            } else {
+                "平台回声消除不可用，退回半双工：下行响时自动压低"
+            }
+            log("上行麦克风已开启：源 ${uplink.sourceLabel}，处理 ${uplink.processingLabel}；$ducking")
         } else {
             log("上行麦克风启动失败：${uplink.openError ?: "未知原因"}")
         }
@@ -674,11 +697,22 @@ class AudioEngineController(
     }
 
     /**
-     * 半双工压低：没有 AEC 时的保底手段。
+     * 半双工压低：**只在平台 AEC 没挂上时**才使用的兜底手段。
      * 下行电平超过阈值就把上行压到 −20 dB，并保持 300 ms，避免在语音停顿处反复开关。
+     *
+     * AEC 生效时这里直接返回：此时压低没有任何收益，只会让人插不上话。
      */
     private fun updateDucking(nowMs: Long, downlinkPeak: Double) {
         val uplink = micUplink ?: return
+
+        if (uplink.aecActive) {
+            // 从"没有 AEC"切到"有 AEC"（或反之）时要把增益恢复回去，否则会一直闷着
+            if (lastDuckGain != 1.0f) {
+                lastDuckGain = 1.0f
+                uplink.setDuckGain(1.0f)
+            }
+            return
+        }
 
         if (downlinkPeak > DUCK_ON_PEAK) {
             duckUntilMs = nowMs + DUCK_HOLD_MS

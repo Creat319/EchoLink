@@ -248,7 +248,15 @@ object Tr {
     private val table: Map<String, Triple<String, String, String>> = mapOf(
         // ---- 卡片标题 ----
         "参数核对" to Triple("參數核對", "パラメータ確認", "Parameters"),
-        "手机音量" to Triple("手機音量", "スマホ音量", "Phone volume"),
+        "语音链路（VOICE_COMMUNICATION）" to Triple("語音鏈路（VOICE_COMMUNICATION）", "音声リンク（VOICE_COMMUNICATION）", "Voice link (VOICE_COMMUNICATION)"),
+    "关闭后拿到原始信号，但也就没有回声消除了" to Triple("關閉後取得原始訊號，但也沒有回聲消除了", "オフにすると生の信号になるが、エコー除去も効かなくなる", "Off gives you the raw signal, but no echo cancellation either"),
+    "回声消除（AEC）" to Triple("回聲消除（AEC）", "エコー除去（AEC）", "Echo cancellation (AEC)"),
+    "消除手机扬声器放出来的回声；生效后不再压低你的声音" to Triple("消除手機揚聲器放出的回聲；生效後不再壓低你的聲音", "スマホのスピーカーから回り込む音を除去。有効なら声を絞らなくなる", "Removes echo from the phone speaker; once active your voice is no longer ducked"),
+    "需要先打开语音链路" to Triple("需要先開啟語音鏈路", "先に音声リンクをオンにしてください", "Turn on the voice link first"),
+    "降噪（NS）" to Triple("降噪（NS）", "ノイズ抑制（NS）", "Noise suppression (NS)"),
+    "压掉稳定底噪，对风扇声、电流声有效" to Triple("壓掉穩定底噪，對風扇聲、電流聲有效", "定常ノイズを抑える。ファン音や電気ノイズに有効", "Suppresses steady background noise such as fans and hum"),
+    "自动增益（AGC）" to Triple("自動增益（AGC）", "自動利得（AGC）", "Auto gain (AGC)"),
+    "默认关闭：它会把底噪一起抬起来" to Triple("預設關閉：它會把底噪一起抬高", "既定はオフ。暗騒音も一緒に持ち上がる", "Off by default: it lifts the noise floor along with your voice"),    "手机音量" to Triple("手機音量", "スマホ音量", "Phone volume"),
     "由 PC 端滑条控制" to Triple("由 PC 端滑桿控制", "PC 側スライダーで調整", "Set by the PC slider"),
     "稳定性" to Triple("穩定性", "安定性", "Stability"),
         "网络（UDP）" to Triple("網路（UDP）", "ネットワーク（UDP）", "Network (UDP)"),

@@ -267,7 +267,57 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 上行麦克风卡片已暂时移除（FeatureFlags.MicUplink = false） -->
+                    <!-- 上行麦克风：把手机麦克风渲染到本机虚拟声卡 -->
+                    <Border Style="{StaticResource CardPanel}"
+                            Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="上行麦克风" Style="{StaticResource SectionTitle}" />
+
+                            <TextBlock Text="把手机当本机麦克风用。手机端会走语音链路并开平台回声消除，所以扬声器在放音乐时你也能随时插话。"
+                                       Style="{StaticResource AppSubtitle}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8" />
+
+                            <CheckBox Content="启用（自动配置虚拟麦克风）"
+                                      IsChecked="{Binding EnableMic}"
+                                      Margin="0,0,0,6" />
+
+                            <TextBlock Text="{Binding MicRoutingText}"
+                                       Style="{StaticResource AppSubtitle}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,6" />
+
+                            <StackPanel Visibility="{Binding HasNoVirtualMic, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="虚拟麦克风必须是内核驱动，Windows 不允许应用在运行时创建，所以需要先装一个虚拟声卡。装完重启一次即可。"
+                                           Style="{StaticResource AppSubtitle}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <Button Content="安装虚拟声卡"
+                                            Command="{Binding InstallVirtualAudioCommand}"
+                                            Margin="0,0,8,0" />
+                                    <Button Content="重新扫描"
+                                            Command="{Binding RescanMicCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <ComboBox ItemsSource="{Binding Devices}"
+                                      SelectedItem="{Binding SelectedMicDevice}"
+                                      DisplayMemberPath="DisplayName"
+                                      Margin="0,0,0,6"
+                                      materialDesign:HintAssist.Hint="高级：手动指定渲染端点（默认已自动选好虚拟声卡）" />
+
+                            <controls:MetricRow Label="上行状态" Value="{Binding MicStatusText}" />
+                            <controls:MetricRow Label="上行水位 / 包数" Value="{Binding MicWaterText}" />
+
+                            <TextBlock Text="{Binding MicPhoneHintText}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource BrandGreen}"
+                                       FontSize="11"
+                                       Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- 手机地址 -->
                     <Border Style="{StaticResource CardPanel}"
                             Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">

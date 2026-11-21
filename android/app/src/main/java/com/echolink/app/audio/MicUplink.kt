@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.Process
 import android.util.Log
 import java.net.InetSocketAddress
@@ -20,16 +23,18 @@ import kotlin.math.max
  * 采集 → 攒 10 ms（480 帧单声道）→ 打上行包 → UDP 发回 PC 的源端口。
  * 10 ms 分块是刻意的：WebRTC AEC 只吃 10 ms 块，接 AEC 时不需要改分包逻辑。
  *
- * **采集源不用 VOICE_COMMUNICATION**：那会打开平台的 AEC/AGC/NS，
- * 与我们自己的 AEC 叠加，既消不干净又会压人声。用 UNPROCESSED（设备不支持时退
- * VOICE_RECOGNITION），拿到的是尽量原始的麦克风信号。
+ * **采集源默认走 VOICE_COMMUNICATION**（见 [MicProcessing]）：EchoLink 的回声源
+ * 就是手机自己扬声器在放我们下发的音频，平台 AEC 正是干这件事的。
+ * 早期版本刻意避开语音源、打算自研 AEC，但自研一直没做，
+ * 结果既没有回声消除、又只能靠半双工压低兜底——插不上话。
  *
- * 半双工压低（P1）：下行电平高时把上行衰减约 20 dB。没有 AEC 时的保底手段，
- * 代价是对方说话时插不上话。
+ * 半双工压低（P1）保留为**兜底**：只有平台 AEC 没挂上时才启用
+ * （由 AudioEngineController 依据 [aecActive] 决定）。
  */
 class MicUplink(
     private val targetProvider: () -> InetSocketAddress?,
     private val onLog: (String) -> Unit,
+    private val processing: MicProcessing = MicProcessing(),
 ) {
     private var record: AudioRecord? = null
     private var thread: Thread? = null
@@ -76,6 +81,82 @@ class MicUplink(
     var openError: String? = null
         private set
 
+    private var usedSourceId = -1
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+    private var autoGain: AutomaticGainControl? = null
+
+    /**
+     * 平台 AEC 是否真的挂上了。
+     * 控制器据此决定还要不要保留半双工压低——AEC 生效时压低是纯粹的音质损失。
+     */
+    @Volatile
+    var aecActive = false
+        private set
+
+    /** 界面展示用：例如「AEC+NS」，或「无处理」。 */
+    var processingLabel = "无处理"
+        private set
+
+    private fun attachPlatformEffects(record: AudioRecord, source: Int) {
+        val applied = mutableListOf<String>()
+
+        // AEC 只在语音源上真正工作；挂在别处多是"创建成功但不生效"
+        if (processing.aec && MicSourcePolicy.supportsPlatformAec(source)) {
+            if (AcousticEchoCanceler.isAvailable()) {
+                echoCanceler = runCatching {
+                    AcousticEchoCanceler.create(record.audioSessionId)
+                }.getOrNull()
+                if (echoCanceler?.enabled == true) {
+                    applied += "AEC"
+                } else {
+                    echoCanceler?.release()
+                    echoCanceler = null
+                }
+            } else {
+                onLog("这台设备不支持平台回声消除")
+            }
+        }
+
+        if (processing.ns && NoiseSuppressor.isAvailable()) {
+            noiseSuppressor = runCatching {
+                NoiseSuppressor.create(record.audioSessionId)
+            }.getOrNull()
+            if (noiseSuppressor?.enabled == true) {
+                applied += "NS"
+            } else {
+                noiseSuppressor?.release()
+                noiseSuppressor = null
+            }
+        }
+
+        if (processing.agc && AutomaticGainControl.isAvailable()) {
+            autoGain = runCatching {
+                AutomaticGainControl.create(record.audioSessionId)
+            }.getOrNull()
+            if (autoGain?.enabled == true) {
+                applied += "AGC"
+            } else {
+                autoGain?.release()
+                autoGain = null
+            }
+        }
+
+        aecActive = echoCanceler != null
+        processingLabel = if (applied.isEmpty()) "无处理" else applied.joinToString("+")
+        usedSourceId = source
+    }
+
+    private fun releaseEffects() {
+        runCatching { echoCanceler?.release() }
+        runCatching { noiseSuppressor?.release() }
+        runCatching { autoGain?.release() }
+        echoCanceler = null
+        noiseSuppressor = null
+        autoGain = null
+        aecActive = false
+    }
+
     /** 下行电平高时由控制器调低（0.1 ≈ −20 dB）。 */
     fun setDuckGain(gain: Float) {
         duckGain = gain.coerceIn(0.05f, 1.0f)
@@ -87,11 +168,7 @@ class MicUplink(
             return true
         }
 
-        val candidateSources = intArrayOf(
-            MediaRecorder.AudioSource.UNPROCESSED,
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            MediaRecorder.AudioSource.MIC,
-        )
+        val candidateSources = MicSourcePolicy.candidates(processing.voiceMode)
 
         var created: AudioRecord? = null
         var usedSource = -1
@@ -135,11 +212,11 @@ class MicUplink(
         }
 
         record = active
-        sourceLabel = when (usedSource) {
-            MediaRecorder.AudioSource.UNPROCESSED -> "UNPROCESSED"
-            MediaRecorder.AudioSource.VOICE_RECOGNITION -> "VOICE_RECOGNITION"
-            else -> "MIC"
-        }
+        sourceLabel = MicSourcePolicy.label(usedSource)
+        usedSourceId = usedSource
+
+        // 平台语音处理：只有语音源上才有意义，且每个 effect 都可能不可用（ROM 差异）
+        attachPlatformEffects(active, usedSource)
 
         channel = try {
             DatagramChannel.open().apply { setOption(StandardSocketOptions.SO_SNDBUF, 256 * 1024) }
@@ -174,7 +251,7 @@ class MicUplink(
         }
 
         isRunning = true
-        onLog("麦克风已启动：48 kHz 单声道，源 $sourceLabel")
+        onLog("麦克风已启动：48 kHz 单声道，源 $sourceLabel，处理 $processingLabel")
         return true
     }
 
@@ -274,6 +351,7 @@ class MicUplink(
     }
 
     private fun closeAll() {
+        releaseEffects()
         try {
             record?.stop()
         } catch (_: Throwable) {

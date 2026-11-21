@@ -27,6 +27,18 @@ data class ReceiverSettings(
     // 不想要的人关一次即可（会持久化）。
     val micEnabled: Boolean = true,
 
+    /** 麦克风走语音链路（VOICE_COMMUNICATION + 平台 AEC）。关掉退回原始信号。 */
+    val micVoiceMode: Boolean = true,
+
+    /** 平台声学回声消除。语音链路下才生效。 */
+    val micAec: Boolean = true,
+
+    /** 平台降噪。 */
+    val micNs: Boolean = true,
+
+    /** 平台自动增益。默认关：会把底噪一起抬起来。 */
+    val micAgc: Boolean = false,
+
     /** 界面语言（引导第一页可选，之后在设置里也能改）。 */
     val language: AppLanguage = AppLanguage.ZH_CN,
 )

@@ -16,6 +16,10 @@ class SettingsStore(context: Context) {
         manualTargetWaterMs = prefs.getInt(KEY_MANUAL_TARGET, 30),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
         micEnabled = prefs.getBoolean(KEY_MIC_ENABLED, true),
+        micVoiceMode = prefs.getBoolean(KEY_MIC_VOICE, true),
+        micAec = prefs.getBoolean(KEY_MIC_AEC, true),
+        micNs = prefs.getBoolean(KEY_MIC_NS, true),
+        micAgc = prefs.getBoolean(KEY_MIC_AGC, false),
         language = AppLanguage.fromTag(prefs.getString(KEY_LANGUAGE, null)),
     )
 
@@ -27,6 +31,10 @@ class SettingsStore(context: Context) {
             .putInt(KEY_MANUAL_TARGET, settings.manualTargetWaterMs)
             .putBoolean(KEY_KEEP_SCREEN_ON, settings.keepScreenOn)
             .putBoolean(KEY_MIC_ENABLED, settings.micEnabled)
+            .putBoolean(KEY_MIC_VOICE, settings.micVoiceMode)
+            .putBoolean(KEY_MIC_AEC, settings.micAec)
+            .putBoolean(KEY_MIC_NS, settings.micNs)
+            .putBoolean(KEY_MIC_AGC, settings.micAgc)
             .putString(KEY_LANGUAGE, settings.language.tag)
             .apply()
     }
@@ -56,6 +64,10 @@ class SettingsStore(context: Context) {
         const val KEY_MANUAL_TARGET = "manual_target_ms"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         const val KEY_MIC_ENABLED = "mic_enabled"
+        const val KEY_MIC_VOICE = "mic_voice_mode"
+        const val KEY_MIC_AEC = "mic_aec"
+        const val KEY_MIC_NS = "mic_ns"
+        const val KEY_MIC_AGC = "mic_agc"
         const val KEY_LANGUAGE = "language"
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_SKIPPED_UPDATE = "skipped_update_version"

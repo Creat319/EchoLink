@@ -9,5 +9,5 @@ namespace EchoLink.Core;
 public static class FeatureFlags
 {
     /// <summary>上行麦克风（手机 → PC）。暂时关闭。</summary>
-    public const bool MicUplink = false;
+    public const bool MicUplink = true;
 }
