@@ -1403,9 +1403,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (snapshot.MicPackets == 0 && phone is not null)
             {
                 _micZeroSince ??= DateTime.UtcNow;
-                MicPhoneHintText = (DateTime.UtcNow - _micZeroSince.Value).TotalSeconds >= 5
-                    ? "手机端还没开始发上行音频：请在手机 App 的「设置」里打开「上行麦克风」，并允许录音权限。"
-                    : string.Empty;
+                var silent = (DateTime.UtcNow - _micZeroSince.Value).TotalSeconds >= 5;
+                MicPhoneHintText = !silent
+                    ? string.Empty
+                    : snapshot.UplinkDatagramsSeen == 0
+                        // 一个包都没到：网络层问题（防火墙/网卡/手机没发）
+                        ? "一个上行包都没收到：如果手机端「上行已发送」在涨，多半是 Windows 防火墙" +
+                          "拦了入站 UDP——把「允许应用通过防火墙」里给 EchoLink 放行，或临时关掉防火墙验证。"
+                        // 包到了但被丢弃
+                        : $"收到 {snapshot.UplinkDatagramsSeen} 个陌生数据报但都不是有效上行包" +
+                          $"（丢弃 {snapshot.UplinkDatagramsRejected}）：多半是两端版本不一致，请把手机端 App 也升到同版本。";
             }
             else
             {

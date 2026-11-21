@@ -134,6 +134,28 @@ class UdpReceiver(
      */
     fun serverEndpoint(): InetSocketAddress? = senderAddress as? InetSocketAddress
 
+    /**
+     * 用**接收这个 socket** 发上行数据。
+     *
+     * 为什么不能自己另开一个 socket：上行包如果从临时端口发出，到 PC 那边就是
+     * "预期之外的入站 UDP"，Windows 防火墙会直接丢掉（回报包之所以能过，是因为它从
+     * 47810 发出，和 PC 发过来的音频是同一条五元组，属于已建立会话的回包）。
+     *
+     * 复用同一个 socket 后，源端口固定 47810，和回报包走同一条五元组，
+     * 不需要用户给应用加任何防火墙规则。
+     *
+     * [DatagramChannel] 允许一个线程 receive 的同时另一个线程 send，这里依赖这一点。
+     */
+    fun sendUplink(buffer: ByteBuffer, target: InetSocketAddress): Boolean {
+        val activeChannel = channel ?: return false
+        return try {
+            activeChannel.send(buffer, target)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     val isRunning: Boolean get() = running
 
     fun start() {

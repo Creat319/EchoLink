@@ -60,6 +60,12 @@ public sealed class EchoLinkSnapshot
     public string MicDeviceName { get; init; } = "-";
     public string? MicError { get; init; }
     public long MicPackets { get; init; }
+
+    /// <summary>收到过的非回报数据报数：区分"包根本没到"与"到了但没认出来"。</summary>
+    public long UplinkDatagramsSeen { get; init; }
+
+    /// <summary>上面那些里被丢弃的数量。</summary>
+    public long UplinkDatagramsRejected { get; init; }
     public double MicWaterMs { get; init; }
     public double MicRatio { get; init; }
     public long MicUnderruns { get; init; }
@@ -357,6 +363,8 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             MicDeviceName = _micPlayer?.DeviceName ?? "-",
             MicError = _micPlayer?.FatalError,
             MicPackets = _micPlayer?.PacketsReceived ?? 0,
+            UplinkDatagramsSeen = _transport?.UplinkDatagramsSeen ?? 0,
+            UplinkDatagramsRejected = _transport?.UplinkDatagramsRejected ?? 0,
             MicWaterMs = _micPlayer?.WaterMs ?? 0,
             MicRatio = _micPlayer?.Ratio ?? 1.0,
             MicUnderruns = _micPlayer?.Underruns ?? 0,

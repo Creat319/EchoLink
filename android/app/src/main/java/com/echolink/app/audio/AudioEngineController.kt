@@ -670,6 +670,8 @@ class AudioEngineController(
         val uplink = MicUplink(
             targetProvider = { receiver?.serverEndpoint() },
             onLog = { log(it) },
+            // 必须走接收端那个 socket：换端口会被 Windows 防火墙当陌生入站丢掉
+            sender = { buffer, target -> receiver?.sendUplink(buffer, target) ?: false },
             processing = MicProcessing(
                 voiceMode = settings.micVoiceMode,
                 aec = settings.micAec,

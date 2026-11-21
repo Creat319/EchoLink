@@ -25,6 +25,9 @@ public sealed class UdpAudioTransport : IDisposable
     private readonly byte[] _controlPacket = new byte[PacketFormat.ControlPacketBytes];
     private uint _controlSequence;
 
+    private long _uplinkSeen;
+    private long _uplinkRejected;
+
     public UdpAudioTransport(int bindPort = PacketFormat.DefaultReportPort)
     {
         BindPort = bindPort;
@@ -72,6 +75,15 @@ public sealed class UdpAudioTransport : IDisposable
     public long BytesSent => Interlocked.Read(ref _bytesSent);
 
     public long SendErrors => Interlocked.Read(ref _sendErrors);
+
+    /// <summary>
+    /// 收到过多少个"不是回报包"的数据报。
+    /// 用来区分两种失败：包根本没到（=0），还是到了但没认出来（&gt;0）。
+    /// </summary>
+    public long UplinkDatagramsSeen => Interlocked.Read(ref _uplinkSeen);
+
+    /// <summary>其中被丢弃的数量（sink 未挂、stream 不对、载荷不整帧）。</summary>
+    public long UplinkDatagramsRejected => Interlocked.Read(ref _uplinkRejected);
 
     public event Action<PhoneReport, IPEndPoint>? ReportReceived;
 
@@ -164,19 +176,26 @@ public sealed class UdpAudioTransport : IDisposable
                 }
 
                 var sink = UplinkSink;
+
+                // 从这往下都是"非回报包"，计入 seen，便于区分"没到"与"到了不认"
+                Interlocked.Increment(ref _uplinkSeen);
+
                 if (sink is null || received < PacketFormat.HeaderBytes)
                 {
+                    Interlocked.Increment(ref _uplinkRejected);
                     continue;
                 }
 
                 if (!AudioPacketHeader.TryRead(_receiveBuffer.AsSpan(0, received), out var header) || !header.IsUplink)
                 {
+                    Interlocked.Increment(ref _uplinkRejected);
                     continue;
                 }
 
                 var payloadBytes = received - PacketFormat.PayloadOffset;
                 if (payloadBytes <= 0 || payloadBytes % PacketFormat.MicBytesPerFrame != 0)
                 {
+                    Interlocked.Increment(ref _uplinkRejected);
                     continue;
                 }
 

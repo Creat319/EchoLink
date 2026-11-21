@@ -10,10 +10,8 @@ import android.media.audiofx.NoiseSuppressor
 import android.os.Process
 import android.util.Log
 import java.net.InetSocketAddress
-import java.net.StandardSocketOptions
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.channels.DatagramChannel
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -35,10 +33,14 @@ class MicUplink(
     private val targetProvider: () -> InetSocketAddress?,
     private val onLog: (String) -> Unit,
     private val processing: MicProcessing = MicProcessing(),
+    /**
+     * 通过**接收端那个 socket** 发上行包（源端口 47810）。
+     * 自己另开 socket 会被 Windows 防火墙当成陌生入站丢掉——见 UdpReceiver.sendUplink。
+     */
+    private val sender: (ByteBuffer, InetSocketAddress) -> Boolean,
 ) {
     private var record: AudioRecord? = null
     private var thread: Thread? = null
-    private var channel: DatagramChannel? = null
 
     private val packet = ByteBuffer.allocate(Protocol.HEADER_BYTES + Protocol.MIC_FRAMES_PER_PACKET * 2)
         .order(ByteOrder.LITTLE_ENDIAN)
@@ -218,16 +220,6 @@ class MicUplink(
         // 平台语音处理：只有语音源上才有意义，且每个 effect 都可能不可用（ROM 差异）
         attachPlatformEffects(active, usedSource)
 
-        channel = try {
-            DatagramChannel.open().apply { setOption(StandardSocketOptions.SO_SNDBUF, 256 * 1024) }
-        } catch (t: Throwable) {
-            openError = t.message
-            onLog("麦克风发送通道创建失败：${t.message}")
-            active.release()
-            record = null
-            return false
-        }
-
         running = true
         try {
             active.startRecording()
@@ -313,7 +305,6 @@ class MicUplink(
 
     private fun sendBlock() {
         val target = targetProvider() ?: return
-        val activeChannel = channel ?: return
 
         packet.clear()
         packet.putInt(sequence)
@@ -325,12 +316,10 @@ class MicUplink(
         }
 
         packet.flip()
-        try {
-            activeChannel.send(packet, target)
+        if (sender(packet, target)) {
             packetsSent++
-        } catch (t: Throwable) {
+        } else {
             sendErrors++
-            Log.w(TAG, "上行发送失败: ${t.message}")
         }
 
         sequence++
@@ -364,11 +353,9 @@ class MicUplink(
 
         record = null
         try {
-            channel?.close()
-        } catch (_: Throwable) {
+            } catch (_: Throwable) {
         }
 
-        channel = null
     }
 
     private companion object {
