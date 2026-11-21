@@ -422,6 +422,12 @@ private fun WaterCard(state: ReceiverState) {
         )
         MetricRow("当前水位", String.format(Locale.US, "%.2f ms", state.engine.waterMs))
         MetricRow("目标（低谷）", String.format(Locale.US, "%.2f ms", state.targetWaterMs))
+        // 音量由 PC 端滑条控制，这里只做回显：能对上就说明控制包真的到了
+        MetricRow(
+            "手机音量",
+            String.format(Locale.US, "%d %%", Math.round(state.gain * 100f)),
+            hint = "由 PC 端滑条控制",
+        )
         MetricRow(
             "重采样比率",
             String.format(Locale.US, "%+.4f %%", (state.engine.ratio - 1.0) * 100.0),

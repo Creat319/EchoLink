@@ -50,6 +50,8 @@ data class ReceiverState(
     val jitterP50Ms: Double = 0.0,
     val controlWarm: Boolean = false,
     val bufferBursts: Int = 2,
+    /** 播放增益（1.0 = 原始），由 PC 端音量滑条设置。 */
+    val gain: Float = 1.0f,
     val reopenCount: Int = 0,
     val lastReopenReason: String? = null,
     val paramWarnings: List<String> = emptyList(),

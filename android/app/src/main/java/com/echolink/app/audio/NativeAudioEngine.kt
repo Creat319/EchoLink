@@ -33,6 +33,9 @@ class NativeAudioEngine : AutoCloseable {
 
     fun setResampleRatio(ratio: Double) = nativeSetResampleRatio(handle, ratio)
 
+    /** 播放增益（线性，1.0 = 原始音量）。由 PC 端音量滑条经控制包驱动。 */
+    fun setGain(gain: Float) = nativeSetGain(handle, gain)
+
     fun resampleRatio(): Double = nativeGetResampleRatio(handle)
 
     fun playBeep() = nativePlayBeep(handle)
@@ -84,8 +87,9 @@ class NativeAudioEngine : AutoCloseable {
     private external fun nativeGetTargetWaterFrames(handle: Long): Int
 
     private external fun nativeSetResampleRatio(handle: Long, ratio: Double)
-
     private external fun nativeGetResampleRatio(handle: Long): Double
+
+    private external fun nativeSetGain(handle: Long, gain: Float)
 
     private external fun nativePlayBeep(handle: Long)
 

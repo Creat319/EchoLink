@@ -108,6 +108,15 @@ Java_com_echolink_app_audio_NativeAudioEngine_nativeGetResampleRatio(
 }
 
 JNIEXPORT void JNICALL
+Java_com_echolink_app_audio_NativeAudioEngine_nativeSetGain(
+        JNIEnv* /*env*/, jobject /*self*/, jlong handle, jfloat gain) {
+    auto* engine = engineOf(handle);
+    if (engine != nullptr) {
+        engine->setGain(static_cast<float>(gain));
+    }
+}
+
+JNIEXPORT void JNICALL
 Java_com_echolink_app_audio_NativeAudioEngine_nativePlayBeep(JNIEnv* /*env*/, jobject /*self*/, jlong handle) {
     auto* engine = engineOf(handle);
     if (engine != nullptr) {

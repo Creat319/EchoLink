@@ -56,6 +56,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _wavDumpEnabled;
     private string _wavDumpPath = string.Empty;
 
+    /// <summary>手机端音量，百分比（0–150）。100 = 原始音量。</summary>
+    private double _phoneVolumePercent = 100;
+    private bool _isVolumeControlSupported = true;
+    private long _lastVolumeSaveMs;
+
     // ---------------- 上行麦克风 ----------------
     private bool _enableMic;
     private DeviceItem? _selectedMicDevice;
@@ -594,9 +599,62 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set => Set(ref _enableKeepAlive, value);
     }
 
-    /// <summary>「自动发现」单选按钮。</summary>
-    public bool AutoDiscover
+    /// <summary>
+    /// 手机端音量（百分比，0–100）。
+    /// 拖动时立即下发控制包，手机上不弹系统音量条、也不需要额外权限。
+    /// </summary>
+    public double PhoneVolumePercent
     {
+        get => _phoneVolumePercent;
+        set
+        {
+            if (!Set(ref _phoneVolumePercent, Math.Round(value)))
+            {
+                return;
+            }
+
+            _engine?.PhoneVolume = (float)(_phoneVolumePercent / 100.0);
+            OnPropertyChanged(nameof(PhoneVolumeText));
+
+            // 拖动时 PropertyChanged 触发很密，每次都写盘太重；节流到 1.5 s 一次。
+            // 这样即使进程被强杀，也只会丢最后一点拖动，不会回到默认值。
+            var now = Environment.TickCount64;
+            if (now - _lastVolumeSaveMs >= 1500)
+            {
+                _lastVolumeSaveMs = now;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>滑条旁边的文字，例如「80%」。</summary>
+    public string PhoneVolumeText => $"{_phoneVolumePercent:0}%";
+
+    /// <summary>
+    /// 手机端是否支持音量控制。旧版 APK（回报版本 &lt; 4）收不到控制包，
+    /// 这时候滑条要禁用并说明原因，否则用户会以为滑条坏了。
+    /// </summary>
+    public bool IsVolumeControlSupported
+    {
+        get => _isVolumeControlSupported;
+        private set
+        {
+            if (Set(ref _isVolumeControlSupported, value))
+            {
+                OnPropertyChanged(nameof(VolumeHintText));
+                OnPropertyChanged(nameof(HasVolumeWarning));
+            }
+        }
+    }
+
+    public bool HasVolumeWarning => !_isVolumeControlSupported;
+
+    public string VolumeHintText => _isVolumeControlSupported
+        ? "拖动即时生效，只改 EchoLink 自己的播放增益"
+        : "手机端版本过旧，暂不支持音量控制——请更新手机端 APK";
+
+    /// <summary>「自动发现」单选按钮。</summary>
+    public bool AutoDiscover    {
         get => _autoDiscover;
         set
         {
@@ -935,6 +993,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var engine = new EchoLinkEngine(options);
         engine.LogEmitted += OnEngineLog;
 
+        // 恢复上次的音量：引擎每秒会重发，所以手机连上后能自动追平
+        engine.PhoneVolume = (float)(_phoneVolumePercent / 100.0);
+
         try
         {
             engine.Start();
@@ -1236,6 +1297,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        IsVolumeControlSupported = snapshot.VolumeControlSupported;
+
         LinkStateText = snapshot.LinkState switch
         {
             EchoLinkLinkState.Connected => "已连通",
@@ -1447,6 +1510,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _reportPort = _settings.ReportPort;
         _wavDumpEnabled = _settings.WavDumpEnabled;
         _wavDumpPath = _settings.WavDumpPath;
+        _phoneVolumePercent = Math.Clamp(_settings.PhoneVolumePercent, 0, 100);
         _enableMic = _settings.EnableMic;
 
         SelectedDevice = null;
@@ -1460,6 +1524,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ReportPort));
         OnPropertyChanged(nameof(WavDumpEnabled));
         OnPropertyChanged(nameof(WavDumpPath));
+        OnPropertyChanged(nameof(PhoneVolumePercent));
+        OnPropertyChanged(nameof(PhoneVolumeText));
     }
 
     private void SaveSettings()
@@ -1475,6 +1541,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _settings.ReportPort = _reportPort;
         _settings.WavDumpEnabled = _wavDumpEnabled;
         _settings.WavDumpPath = _wavDumpPath;
+        _settings.PhoneVolumePercent = _phoneVolumePercent;
         _settings.EnableMic = _enableMic;
         _settings.MicDeviceId = _selectedMicDevice?.Id;
         _settings.MicDeviceName = _selectedMicDevice?.Name ?? "（未选择虚拟麦克风）";

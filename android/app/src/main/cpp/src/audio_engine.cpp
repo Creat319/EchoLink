@@ -503,6 +503,11 @@ int32_t AudioEngine::readFrames(int16_t* out, int32_t frames) {
     double pos = _readPos;
     int32_t produced = 0;
 
+    // 音量斜坡：目标值由控制线程给，这里在一个回调内线性走完。
+    // 这样拖动滑条时不会有阶跃带来的咔哒声。
+    const float gainTarget = _gainTarget.load(std::memory_order_relaxed);
+    const float gainStep = (gainTarget - _gainCurrent) / static_cast<float>(frames > 0 ? frames : 1);
+
     // 回调入口水位：这是"读端此刻手上还有多少料"的唯一可靠口径。
     // 记录下来才能和"欠载时到底水位多少"对账——之前 UI 上的 min/avg 口径不一致，
     // 出现过"最小值 37.0 ms > 平均值 36.7 ms"这种不可能的数字。
@@ -538,6 +543,9 @@ int32_t AudioEngine::readFrames(int16_t* out, int32_t frames) {
             gain = 1.0f - (static_cast<float>(_fadeInRemaining) / static_cast<float>(kFadeFrames));
             _fadeInRemaining--;
         }
+
+        _gainCurrent += gainStep;
+        gain *= _gainCurrent;
 
         out[produced * 2] = clamp16(l * gain);
         out[produced * 2 + 1] = clamp16(r * gain);

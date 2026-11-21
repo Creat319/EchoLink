@@ -78,6 +78,18 @@ public:
     int32_t targetWaterFrames() const { return _targetWaterFrames.load(std::memory_order_relaxed); }
 
     void setResampleRatio(double ratio);
+
+    /**
+     * 设置播放增益（线性，0.0–2.0）。1.0 = 原始音量。
+     * 由控制包驱动，音频线程做斜坡过渡，不会产生点击声。
+     */
+    void setGain(float gain) {
+        if (gain < 0.0f) gain = 0.0f;
+        if (gain > 2.0f) gain = 2.0f;
+        _gainTarget.store(gain, std::memory_order_relaxed);
+    }
+
+    float gain() const { return _gainTarget.load(std::memory_order_relaxed); }
     double resampleRatio() const { return _ratio.load(std::memory_order_relaxed); }
 
     /// 请求重新垫水位（欠载过深时由控制线程调用，比靠比率慢慢抽干快得多）
@@ -116,6 +128,13 @@ private:
     // 消费端状态（只有音频回调线程碰）
     double _readPos = 1.0;
     int32_t _fadeInRemaining = 0;
+
+    // 音量（PC 端滑条 → 控制包 → 这里）。
+    // _gainTarget 由控制线程写、音频线程读；_gainCurrent 只属于音频线程，
+    // 在回调内做线性斜坡，避免拖动滑条时的"咔哒"声。
+    std::atomic<float> _gainTarget{1.0f};
+    float _gainCurrent = 1.0f;
+
     float _beepPhase = 0.0f;
 
     // 启动垫水位：开流/重建后先静音等待，直到环里攒够 target 帧再开始消费。

@@ -69,6 +69,8 @@ class UdpReceiver(
     private val externalFrameConsumer: (refFrameIndex: Long, buffer: ByteBuffer, offsetBytes: Int, frames: Int) -> Unit,
     private val onJitterMicros: (Long) -> Unit,
     private val reportPayload: (NetworkSnapshot) -> ByteArray,
+    /** 收到 PC 端音量控制包时回调（线性增益，1.0 = 原始音量）。 */
+    private val onGainCommand: (Float) -> Unit = {},
 ) : AutoCloseable {
 
     private val buffer = ByteBuffer.allocateDirect(4096).order(ByteOrder.LITTLE_ENDIAN)
@@ -102,6 +104,11 @@ class UdpReceiver(
     private var reportSeq = 0
     private var lastReportNanos = 0L
     private var lastRateNanos = 0L
+
+    /** 最近一次收到的音量增益（1.0 = 原始）。 */
+    @Volatile
+    var lastGain: Float = 1.0f
+        private set
     private var lastRatePackets = 0L
     private var lastSnapshotNanos = 0L
     private var lastArrivalNanosGlobal = 0L
@@ -189,6 +196,21 @@ class UdpReceiver(
             val header = AudioPacketCodec.readHeader(buffer)
             if (header == null) {
                 malformed++
+                publishIfDue(arrivalNanos)
+                continue
+            }
+
+            // 控制包（PC → 手机音量）：不是音频，不参与丢包/抖动/时间线统计
+            if (header.stream == Protocol.STREAM_CONTROL) {
+                if (Protocol.isControlDatagram(header.stream, length)) {
+                    Protocol.controlGainFrom(buffer)?.let { gain ->
+                        lastGain = gain
+                        onGainCommand(gain)
+                    }
+                } else {
+                    malformed++
+                }
+                maybeSendReport(activeChannel, arrivalNanos)
                 publishIfDue(arrivalNanos)
                 continue
             }

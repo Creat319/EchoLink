@@ -62,8 +62,15 @@ public readonly struct PhoneReport
 {
     public const uint Magic = 0x50524C45; // 'E','L','R','P'
     public const int Size = 40;
-    /// <summary>本端能理解的最高回报版本。2 = 支持变长音频包。</summary>
-    public const ushort CurrentVersion = 2;
+    /// <summary>本端能理解的最高回报版本。4 = 手机端认识控制包（音量）。</summary>
+    public const ushort CurrentVersion = 4;
+
+    /// <summary>
+    /// 手机端能正确解析控制包（PC → 手机音量）的最低回报版本。
+    /// 低于此版本的手机收到 28 B 控制包会把它当成 2 帧音频塞进环形缓冲，
+    /// 每秒响一下咔哒声——所以必须先确认版本再发。
+    /// </summary>
+    public const ushort MinControlVersion = 4;
 
     /// <summary>能正确解析变长音频包的最低手机端版本。</summary>
     public const ushort MinVariablePacketVersion = 2;

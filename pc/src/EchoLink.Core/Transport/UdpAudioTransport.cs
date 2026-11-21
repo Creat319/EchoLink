@@ -22,6 +22,9 @@ public sealed class UdpAudioTransport : IDisposable
     private long _bytesSent;
     private long _sendErrors;
 
+    private readonly byte[] _controlPacket = new byte[PacketFormat.ControlPacketBytes];
+    private uint _controlSequence;
+
     public UdpAudioTransport(int bindPort = PacketFormat.DefaultReportPort)
     {
         BindPort = bindPort;
@@ -79,8 +82,7 @@ public sealed class UdpAudioTransport : IDisposable
     public IPEndPoint? UplinkSource { get; private set; }
 
     public void Send(ReadOnlySpan<byte> packet)
-    {
-        var remote = Remote;
+    {        var remote = Remote;
         if (remote is null)
         {
             return;
@@ -95,6 +97,33 @@ public sealed class UdpAudioTransport : IDisposable
         catch (SocketException)
         {
             Interlocked.Increment(ref _sendErrors);
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// 发送控制命令（目前只有音量）。失败静默——控制包是尽力而为，
+    /// 丢了下一轮重发即可，绝不能影响音频主路径。
+    /// </summary>
+    public void SendControl(uint command, float value)
+    {
+        var remote = Remote;
+        if (remote is null)
+        {
+            return;
+        }
+
+        var sequence = unchecked(_controlSequence++);
+        PacketFormat.WriteControl(_controlPacket, sequence, command, value);
+
+        try
+        {
+            _socket.SendTo(_controlPacket, SocketFlags.None, remote);
+        }
+        catch (SocketException)
+        {
         }
         catch (ObjectDisposedException)
         {

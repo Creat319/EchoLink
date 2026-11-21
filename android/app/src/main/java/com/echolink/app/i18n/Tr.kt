@@ -248,7 +248,9 @@ object Tr {
     private val table: Map<String, Triple<String, String, String>> = mapOf(
         // ---- 卡片标题 ----
         "参数核对" to Triple("參數核對", "パラメータ確認", "Parameters"),
-        "稳定性" to Triple("穩定性", "安定性", "Stability"),
+        "手机音量" to Triple("手機音量", "スマホ音量", "Phone volume"),
+    "由 PC 端滑条控制" to Triple("由 PC 端滑桿控制", "PC 側スライダーで調整", "Set by the PC slider"),
+    "稳定性" to Triple("穩定性", "安定性", "Stability"),
         "网络（UDP）" to Triple("網路（UDP）", "ネットワーク（UDP）", "Network (UDP)"),
         "正在使用" to Triple("正在使用", "使用中", "In use"),
         "支持但未使用" to Triple("支援但未使用", "対応・未使用", "Supported, unused"),

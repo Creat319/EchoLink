@@ -31,6 +31,9 @@ public sealed class AppSettings
 
     public bool EnableKeepAlive { get; set; } = true;
 
+    /// <summary>手机端音量百分比（0–100）。100 = 原始音量。</summary>
+    public double PhoneVolumePercent { get; set; } = 100;
+
     // ---------------- 手机地址 ----------------
     public bool AutoDiscoverTarget { get; set; } = true;
 

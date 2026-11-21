@@ -22,10 +22,42 @@ object Protocol {
     const val HEADER_BYTES = 20
     const val PACKET_BYTES = HEADER_BYTES + PAYLOAD_BYTES            // 980（最大包长）
 
-    /** 流类型字段（协议 v3）。0 = 下行系统音频，1 = 上行麦克风。 */
+    /** 流类型字段（协议 v3）。0 = 下行系统音频，1 = 上行麦克风，2 = 控制命令。 */
     const val STREAM_OFFSET = 16
     const val STREAM_DOWNLINK = 0
     const val STREAM_UPLINK = 1
+    const val STREAM_CONTROL = 2
+
+    /**
+     * 控制包（PC → 手机）：复用 20 B 包头，载荷 8 B = [command:u32][value:f32]。
+     * 与音频包靠 stream 字段区分，长度固定 28 B。
+     */
+    const val CONTROL_PAYLOAD_BYTES = 8
+    const val CONTROL_PACKET_BYTES = HEADER_BYTES + CONTROL_PAYLOAD_BYTES   // 28
+    const val CONTROL_SET_GAIN = 1
+
+    /** 判定一个数据报是不是控制包：看 stream 字段 + 定长 28 B，双重确认。 */
+    fun isControlDatagram(stream: Int, datagramBytes: Int): Boolean =
+        stream == STREAM_CONTROL && datagramBytes == CONTROL_PACKET_BYTES
+
+    fun controlGainFrom(buffer: ByteBuffer): Float? {
+        if (buffer.capacity() < CONTROL_PACKET_BYTES) {
+            return null
+        }
+
+        val order = buffer.order()
+        buffer.order(ByteOrder.LITTLE_ENDIAN)
+        return try {
+            val command = buffer.getInt(HEADER_BYTES)
+            if (command != CONTROL_SET_GAIN) {
+                null
+            } else {
+                buffer.getFloat(HEADER_BYTES + 4).coerceIn(0.0f, 2.0f)
+            }
+        } finally {
+            buffer.order(order)
+        }
+    }
 
     /** 上行麦克风：单声道 48 kHz，10 ms = 480 帧 = 960 B（AEC 也要求 10 ms 块）。 */
     const val MIC_CHANNELS = 1
@@ -95,7 +127,9 @@ object AudioPacketCodec {
 object StatusReport {
     const val SIZE = 40
     const val MAGIC = 0x50524C45
-    const val VERSION = 3   // 3 = 上行麦克风（包头加 stream 字段，20 B）；见 docs/protocol.md §5
+    // 4 = 认识控制包（PC → 手机音量）。PC 端据此决定要不要发控制包：
+    // 旧版 APK 会把 28 B 控制包当成 2 帧音频播出来，所以版本必须卡住。
+    const val VERSION = 4
     const val TYPE_STATUS = 1
 
     fun build(

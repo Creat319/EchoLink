@@ -62,6 +62,10 @@ class AudioEngineController(
     private var duckUntilMs = 0L
     private var lastDuckGain = 1.0f
     private var bufferBursts = START_BUFFER_BURSTS
+
+    /** 当前播放增益（1.0 = 原始音量），由 PC 端音量滑条经控制包设置。 */
+    @Volatile
+    private var gainValue = 1.0f
     private val waterMinWindow = ArrayDeque<Double>(WATER_WINDOW_TICKS + 1)
     private var lastCallbackCount = -1L
     private var lastCallbackAdvanceMs = 0L
@@ -131,6 +135,12 @@ class AudioEngineController(
                 },
                 onJitterMicros = { micros -> latency.onJitter(micros) },
                 reportPayload = { network -> buildReport(network) },
+                onGainCommand = { gain ->
+                    // PC 端音量滑条：直接改播放增益，不动系统音量，
+                    // 所以不会弹音量条、也不需要额外权限。
+                    runCatching { newEngine.setGain(gain) }
+                    gainValue = gain
+                },
             )
             receiver = newReceiver
             runCatching { newReceiver.start() }
@@ -536,6 +546,7 @@ class AudioEngineController(
                 jitterP50Ms = jitterP50Ms,
                 controlWarm = controlWarm,
                 bufferBursts = bufferBursts,
+            gain = gainValue,
                 reopenCount = reopenCount,
                 lastReopenReason = lastReopenReason,
                 paramWarnings = paramWarnings.toList(),

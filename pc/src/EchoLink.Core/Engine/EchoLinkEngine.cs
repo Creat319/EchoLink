@@ -53,6 +53,9 @@ public sealed class EchoLinkSnapshot
     public double SecondsSincePhoneReport { get; init; }
 
     // ---- 上行麦克风 ----
+    /// <summary>手机端是否支持音量控制（回报版本 ≥ 4）。</summary>
+    public bool VolumeControlSupported { get; init; }
+
     public bool MicEnabled { get; init; }
     public string MicDeviceName { get; init; } = "-";
     public string? MicError { get; init; }
@@ -106,6 +109,10 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     private string _linkDescription = "未启动";
     private PhoneReport? _phoneReport;
     private long _phoneReportTimestamp;
+
+    /// <summary>最新一次回报里手机端声明的协议版本；0 = 还没收到过。</summary>
+    private volatile ushort _phoneVersion;
+    private bool _warnedVolumeUnsupported;
     private bool _warnedPhoneVersion;
     private IReadOnlyList<TargetCandidate> _candidates = Array.Empty<TargetCandidate>();
 
@@ -345,6 +352,7 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             Candidates = _candidates.Select(c => c.ToString()).ToList(),
             Phone = report,
             SecondsSincePhoneReport = reportTicks == 0 ? double.MaxValue : (Stopwatch.GetTimestamp() - reportTicks) / (double)Stopwatch.Frequency,
+            VolumeControlSupported = CanSendControl,
             MicEnabled = _micPlayer is not null,
             MicDeviceName = _micPlayer?.DeviceName ?? "-",
             MicError = _micPlayer?.FatalError,
@@ -505,6 +513,44 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     void IPacketSink.Send(ReadOnlySpan<byte> packet, uint sequence, ulong sampleCount)
         => _transport?.Send(packet);
 
+    // ------------------------------------------------------------------ 手机音量
+
+    private volatile float _phoneVolume = 1.0f;
+
+    /// <summary>
+    /// 是否允许下发控制包。只有手机端声明它认识控制包（回报版本 ≥ 4）才发——
+    /// 否则 28 B 的控制包会被旧版 APK 当成 2 帧音频播出来（每秒一下咔哒声）。
+    /// </summary>
+    private bool CanSendControl => _phoneVersion >= PhoneReport.MinControlVersion;
+
+    /// <summary>手机端播放增益（1.0 = 原始音量）。拖动滑条时立即下发。</summary>
+    public float PhoneVolume
+    {
+        get => _phoneVolume;
+        set
+        {
+            var clamped = Math.Clamp(value, 0f, 2f);
+            if (Math.Abs(clamped - _phoneVolume) < 0.0005f)
+            {
+                return;
+            }
+
+            _phoneVolume = clamped;
+            // 立即发一次，拖动时手感是实时的；掉包也无所谓，监控线程每秒会重发。
+            if (CanSendControl)
+            {
+                _transport?.SendControl(PacketFormat.ControlSetGain, clamped);
+            }
+            else if (!_warnedVolumeUnsupported && _phoneVersion != 0)
+            {
+                // 别让用户以为滑条坏了：明确说是手机端版本太旧
+                _warnedVolumeUnsupported = true;
+                Log($"⚠ 手机端回报版本 {_phoneVersion} 不支持音量控制（需要 ≥ {PhoneReport.MinControlVersion}），" +
+                    "请更新新版 APK。音频不受影响。");
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ 链路与监控
 
     private void LinkThread()
@@ -640,6 +686,12 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             _packetsPerSecond = elapsed > 0 ? (sent - _lastSentPackets) / elapsed : 0;
             _lastSentPackets = sent;
 
+            // 每秒重发一次音量：手机重连/丢包后也能自动追平，不用用户再动滑条
+            if (CanSendControl)
+            {
+                _transport?.SendControl(PacketFormat.ControlSetGain, _phoneVolume);
+            }
+
             // 电平台自然衰减
             _peakHold *= 0.75;
             _rmsInstant *= 0.5;
@@ -704,6 +756,7 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
     {
         var first = _phoneReport is null || SecondsSinceReport() > 1.0;
         _phoneReport = report;
+        _phoneVersion = report.Version;
         Interlocked.Exchange(ref _phoneReportTimestamp, Stopwatch.GetTimestamp());
 
         // 版本不匹配时**声音是完全没有的**（旧 APK 会把变长包全判成畸形丢掉），
