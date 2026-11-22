@@ -40,6 +40,59 @@ object Protocol {
     fun isControlDatagram(stream: Int, datagramBytes: Int): Boolean =
         stream == STREAM_CONTROL && datagramBytes == CONTROL_PACKET_BYTES
 
+    // ---------------------------------------------------------------- 局域网发现
+    //
+    // 无线连接时，PC 往各网段广播地址发探测，手机从这里应答。
+    // 见 PC 端 PacketFormat.StreamDiscovery 的说明。
+
+    const val STREAM_DISCOVERY = 3
+    const val DISCOVER_REQUEST = 1
+    const val DISCOVER_REPLY = 2
+
+    /** 应答里设备名的最大字节数（UTF-8）。 */
+    const val DISCOVER_NAME_MAX_BYTES = 48
+
+    const val DISCOVER_REQUEST_BYTES = HEADER_BYTES + 8
+    const val DISCOVER_REPLY_HEADER_BYTES = HEADER_BYTES + 12
+
+    /** 是发现请求就返回其中的 nonce，否则 null。 */
+    fun readDiscoverNonce(buffer: ByteBuffer, datagramBytes: Int): Int? {
+        if (datagramBytes < DISCOVER_REQUEST_BYTES || buffer.capacity() < DISCOVER_REQUEST_BYTES) {
+            return null
+        }
+
+        val order = buffer.order()
+        buffer.order(ByteOrder.LITTLE_ENDIAN)
+        return try {
+            if (buffer.getInt(STREAM_OFFSET) != STREAM_DISCOVERY) {
+                null
+            } else if (buffer.getInt(HEADER_BYTES) != DISCOVER_REQUEST) {
+                null
+            } else {
+                buffer.getInt(HEADER_BYTES + 4)
+            }
+        } finally {
+            buffer.order(order)
+        }
+    }
+
+    /** 构造发现应答：[command][nonce][nameLen][name]。 */
+    fun buildDiscoverReply(nonce: Int, name: String): ByteArray {
+        val raw = name.toByteArray(Charsets.UTF_8)
+        val nameBytes = if (raw.size > DISCOVER_NAME_MAX_BYTES) raw.copyOf(DISCOVER_NAME_MAX_BYTES) else raw
+
+        val out = ByteBuffer.allocate(DISCOVER_REPLY_HEADER_BYTES + nameBytes.size).order(ByteOrder.LITTLE_ENDIAN)
+        out.putInt(nonce)                       // seq 位置放 nonce，方便对账
+        out.putLong(0L)
+        out.putInt(0)
+        out.putInt(STREAM_DISCOVERY)
+        out.putInt(DISCOVER_REPLY)
+        out.putInt(nonce)
+        out.putInt(nameBytes.size)
+        out.put(nameBytes)
+        return out.array()
+    }
+
     fun controlGainFrom(buffer: ByteBuffer): Float? {
         if (buffer.capacity() < CONTROL_PACKET_BYTES) {
             return null

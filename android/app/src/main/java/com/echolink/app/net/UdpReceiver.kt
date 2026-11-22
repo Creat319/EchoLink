@@ -71,6 +71,11 @@ class UdpReceiver(
     private val reportPayload: (NetworkSnapshot) -> ByteArray,
     /** 收到 PC 端音量控制包时回调（线性增益，1.0 = 原始音量）。 */
     private val onGainCommand: (Float) -> Unit = {},
+
+    /** 回答局域网发现时上报的设备名。 */
+    private val deviceNameProvider: () -> String = {
+        android.os.Build.MODEL?.takeIf { it.isNotBlank() } ?: "Android 手机"
+    },
 ) : AutoCloseable {
 
     private val buffer = ByteBuffer.allocateDirect(4096).order(ByteOrder.LITTLE_ENDIAN)
@@ -222,6 +227,16 @@ class UdpReceiver(
                 continue
             }
 
+            // 局域网发现：PC 广播探测过来，我们单播回一个带设备名的应答。
+            // 这是无线连接下 PC 自动找到手机的唯一途径。
+            if (header.stream == Protocol.STREAM_DISCOVERY) {
+                Protocol.readDiscoverNonce(buffer, length)?.let { nonce ->
+                    replyToDiscovery(activeChannel, source, nonce)
+                }
+                publishIfDue(arrivalNanos)
+                continue
+            }
+
             // 控制包（PC → 手机音量）：不是音频，不参与丢包/抖动/时间线统计
             if (header.stream == Protocol.STREAM_CONTROL) {
                 if (Protocol.isControlDatagram(header.stream, length)) {
@@ -270,8 +285,33 @@ class UdpReceiver(
         }
     }
 
-    private fun trackContinuity(header: com.echolink.app.audio.AudioPacketHeader, framesInPacket: Int) {
-        val previous = lastSequence
+    /**
+     * 回应局域网发现探测。
+     *
+     * 必须从**接收这个 socket** 发出去（和上行麦克风同样的理由）：
+     * 源端口固定 47810，PC 侧才可能把它当成自己那条流的回程放行。
+     */
+    private fun replyToDiscovery(
+        activeChannel: DatagramChannel,
+        source: SocketAddress,
+        nonce: Int,
+    ) {
+        val name = deviceNameProvider()
+        val payload = Protocol.buildDiscoverReply(nonce, name)
+        try {
+            activeChannel.send(ByteBuffer.wrap(payload), source)
+            discoveryReplies++
+        } catch (_: Exception) {
+            // 发现是尽力而为，失败不影响音频
+        }
+    }
+
+    /** 应答过的发现请求次数（界面可用来确认"PC 确实找过我"）。 */
+    @Volatile
+    var discoveryReplies = 0L
+        private set
+
+    private fun trackContinuity(header: com.echolink.app.audio.AudioPacketHeader, framesInPacket: Int) {        val previous = lastSequence
         if (previous != null) {
             val expected = previous + 1
             val delta = header.sequence - expected

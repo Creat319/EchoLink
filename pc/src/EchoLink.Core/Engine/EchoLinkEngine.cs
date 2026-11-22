@@ -118,6 +118,9 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
 
     /// <summary>最新一次回报里手机端声明的协议版本；0 = 还没收到过。</summary>
     private volatile ushort _phoneVersion;
+
+    /// <summary>最近一轮局域网发现到的设备（供界面展示）。</summary>
+    private IReadOnlyList<DiscoveredPhone> _discoveredPhones = Array.Empty<DiscoveredPhone>();
     private bool _warnedVolumeUnsupported;
     private bool _warnedPhoneVersion;
     private IReadOnlyList<TargetCandidate> _candidates = Array.Empty<TargetCandidate>();
@@ -647,6 +650,32 @@ public sealed class EchoLinkEngine : ILoopbackSink, IPacketSink, IDisposable
             }
 
             list.Add((new IPEndPoint(address, _options.AudioPort), candidate.AdapterName));
+        }
+
+        // 没有 USB 网络共享适配器（= 不是 USB 连接）时，试试局域网广播发现手机。
+        // 无线连接下这是唯一能"自动找到"手机的途径；找不到就退回手动填 IP。
+        if (list.Count == 0 && _transport is not null)
+        {
+            var discovered = LanDiscovery.Discover(_transport, _options.AudioPort);
+            if (discovered.Count > 0)
+            {
+                _discoveredPhones = discovered;
+                foreach (var phone in discovered)
+                {
+                    var label = string.IsNullOrWhiteSpace(phone.Name)
+                        ? "局域网发现"
+                        : $"局域网发现 · {phone.Name}";
+                    list.Add((new IPEndPoint(phone.Address, _options.AudioPort), label));
+                }
+
+                Log($"局域网发现 {discovered.Count} 台设备：" +
+                    string.Join("、", discovered.Select(d => $"{d.Name ?? "未命名"}@{d.Address}")));
+            }
+            else
+            {
+                Log("局域网内没有发现手机（Windows 防火墙可能拦了入站 UDP）。" +
+                    "可以手动填写手机 IP —— 手机「设置」页里有本机地址。");
+            }
         }
 
         if (manualOk)

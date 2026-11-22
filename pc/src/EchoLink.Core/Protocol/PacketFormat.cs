@@ -44,6 +44,84 @@ public static class PacketFormat
     /// <summary>控制命令号。</summary>
     public const uint ControlSetGain = 1;
 
+    // ---------------------------------------------------------------- 局域网发现
+    //
+    // 无线（局域网）连接用：PC 往各网段广播地址发探测包，手机收到后单播回应答。
+    // 复用同一个 20 B 包头，靠 stream = 3 区分。
+    //
+    // 为什么是 PC 先发：PC 这边有 Windows 防火墙，"手机主动广播"在 PC 眼里是陌生入站，
+    // 默认被丢；由 PC 先发包、手机应答，回包至少是同一条流的回程，更容易过。
+    // 但广播探测能不能收到回包仍取决于防火墙策略，所以手动填 IP 永远是保底方案。
+
+    /// <summary>流类型：局域网发现。</summary>
+    public const uint StreamDiscovery = 3;
+
+    public const uint DiscoverRequest = 1;
+    public const uint DiscoverReply = 2;
+
+    /// <summary>应答里设备名的最大字节数（UTF-8），够放 "Pixel 8 Pro" 这类名字。</summary>
+    public const int DiscoverNameMaxBytes = 48;
+
+    /// <summary>请求：[command:u32][nonce:u32]，整包 28 B。</summary>
+    public const int DiscoverRequestBytes = HeaderBytes + 8;
+
+    /// <summary>应答：[command:u32][nonce:u32][nameLen:u32][name...]。</summary>
+    public const int DiscoverReplyHeaderBytes = HeaderBytes + 12;
+
+    public static void WriteDiscoverRequest(Span<byte> destination, uint nonce)
+    {
+        if (destination.Length < DiscoverRequestBytes)
+        {
+            throw new ArgumentException($"需要至少 {DiscoverRequestBytes} 字节", nameof(destination));
+        }
+
+        destination[..DiscoverRequestBytes].Clear();
+        BinaryPrimitives.WriteUInt32LittleEndian(destination, nonce);   // seq 位置放 nonce，方便日志对账
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[StreamOffset..], StreamDiscovery);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[HeaderBytes..], DiscoverRequest);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[(HeaderBytes + 4)..], nonce);
+    }
+
+    /// <summary>解析应答。不是应答包时返回 false。</summary>
+    public static bool TryReadDiscoverReply(ReadOnlySpan<byte> packet, out uint nonce, out string? name)
+    {
+        nonce = 0;
+        name = null;
+
+        if (packet.Length < DiscoverReplyHeaderBytes)
+        {
+            return false;
+        }
+
+        if (BinaryPrimitives.ReadUInt32LittleEndian(packet[StreamOffset..]) != StreamDiscovery ||
+            BinaryPrimitives.ReadUInt32LittleEndian(packet[HeaderBytes..]) != DiscoverReply)
+        {
+            return false;
+        }
+
+        nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[(HeaderBytes + 4)..]);
+
+        var nameLen = BinaryPrimitives.ReadUInt32LittleEndian(packet[(HeaderBytes + 8)..]);
+        var available = packet.Length - DiscoverReplyHeaderBytes;
+        // 名字长度不合法时仍然认为"应答有效"，只是没有名字——总比把整台设备丢掉强
+        if (nameLen == 0 || nameLen > (uint)available || nameLen > DiscoverNameMaxBytes)
+        {
+            return true;
+        }
+
+        try
+        {
+            name = System.Text.Encoding.UTF8.GetString(
+                packet.Slice(DiscoverReplyHeaderBytes, (int)nameLen));
+        }
+        catch (ArgumentException)
+        {
+            name = null;
+        }
+
+        return true;
+    }
+
     /// <summary>上行麦克风的采样率与声道数（单声道，减少带宽与 CPU）。</summary>
     public const int MicSampleRate = 48000;
     public const int MicChannels = 1;

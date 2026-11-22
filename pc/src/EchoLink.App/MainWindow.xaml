@@ -341,7 +341,7 @@
                         <StackPanel>
                             <TextBlock Text="手机地址" Style="{StaticResource SectionTitle}" />
 
-                            <RadioButton Content="自动发现（USB 网络共享网关）"
+                            <RadioButton Content="自动发现（USB 网络共享 / 同一局域网）"
                                          GroupName="targetMode"
                                          IsChecked="{Binding AutoDiscover}"
                                          Margin="0,0,0,6" />
@@ -351,9 +351,34 @@
                                          Margin="0,0,0,8" />
 
                             <TextBox Text="{Binding ManualTarget, UpdateSourceTrigger=PropertyChanged}"
-                                     materialDesign:HintAssist.Hint="手机 IP，例如 192.168.96.150"
+                                     materialDesign:HintAssist.Hint="手机 IP，例如 192.168.96.150 或 192.168.1.37"
                                      IsEnabled="{Binding ManualMode}"
-                                     Margin="0,0,0,10" />
+                                     Margin="0,0,0,8" />
+
+                            <!-- 无线（局域网）连接：不接数据线，手机和电脑连同一个 WiFi 路由器。
+                                 自动发现靠广播探测；万一被防火墙拦了，就点扫描拿到 IP 再手填。 -->
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Content="扫描局域网"
+                                        Command="{Binding ScanLanCommand}"
+                                        Padding="12,3" />
+                                <TextBlock Grid.Column="1"
+                                           Text="无线连接：手机和电脑连同一个 WiFi 即可，不用数据线"
+                                           Style="{StaticResource AppSubtitle}"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,0,0"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+
+                            <TextBlock Text="{Binding LanScanText}"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="{StaticResource BrandGreen}"
+                                       Margin="0,0,0,8"
+                                       Visibility="{Binding HasLanScanResult, Converter={StaticResource BoolToVisibility}}" />
 
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>

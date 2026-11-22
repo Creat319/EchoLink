@@ -45,6 +45,15 @@ public sealed class UdpAudioTransport : IDisposable
         _socket.ReceiveBufferSize = 128 * 1024;
         _socket.SendBufferSize = 128 * 1024;
 
+        // 局域网发现要往网段广播地址发包，不开这个会抛 SocketException
+        try
+        {
+            _socket.EnableBroadcast = true;
+        }
+        catch (SocketException)
+        {
+        }
+
         // 关掉 SIO_UDP_CONNRESET：手机不在线时 ICMP 端口不可达会让 Receive 抛 ConnectionReset
         try
         {
@@ -86,6 +95,29 @@ public sealed class UdpAudioTransport : IDisposable
     public long UplinkDatagramsRejected => Interlocked.Read(ref _uplinkRejected);
 
     public event Action<PhoneReport, IPEndPoint>? ReportReceived;
+
+    /// <summary>收到局域网内手机的发现应答（IP、设备名）。</summary>
+    public event Action<IPEndPoint, string?>? DiscoveryReplied;
+
+    private readonly byte[] _discoverProbe = new byte[PacketFormat.DiscoverRequestBytes];
+
+    /// <summary>
+    /// 往指定地址发一个发现探测。广播地址需要事先开 SO_BROADCAST（构造函数里已开）。
+    /// </summary>
+    public void SendDiscoverProbe(IPEndPoint target, uint nonce)
+    {
+        try
+        {
+            PacketFormat.WriteDiscoverRequest(_discoverProbe, nonce);
+            _socket.SendTo(_discoverProbe, SocketFlags.None, target);
+        }
+        catch (SocketException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
 
     /// <summary>上行麦克风的落点（协议 v3 起：包头 stream=1 的包）。</summary>
     public IUplinkSink? UplinkSink { get; set; }
@@ -172,6 +204,13 @@ public sealed class UdpAudioTransport : IDisposable
                 if (PhoneReport.TryParse(_receiveBuffer.AsSpan(0, received), DateTimeOffset.Now, out var report))
                 {
                     ReportReceived?.Invoke(report, source);
+                    continue;
+                }
+
+                // 局域网发现应答：手机收到广播探测后单播回来
+                if (PacketFormat.TryReadDiscoverReply(_receiveBuffer.AsSpan(0, received), out _, out var deviceName))
+                {
+                    DiscoveryReplied?.Invoke(source, deviceName);
                     continue;
                 }
 

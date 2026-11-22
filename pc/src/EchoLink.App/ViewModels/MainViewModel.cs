@@ -128,6 +128,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClickTrainCommand = new RelayCommand(PlayClickTrain);
         RefreshDevicesCommand = new RelayCommand(RefreshDevices);
         RescanCandidatesCommand = new RelayCommand(RescanCandidates);
+        ScanLanCommand = new RelayCommand(ScanLan);
         BrowseWavCommand = new RelayCommand(BrowseWav);
         ToggleCandidatesCommand = new RelayCommand(() => ShowCandidates = !ShowCandidates);
         CheckUpdateCommand = new RelayCommand(() => _ = CheckUpdatesAsync());
@@ -339,6 +340,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand RefreshDevicesCommand { get; }
 
     public RelayCommand RescanCandidatesCommand { get; }
+
+    /// <summary>扫描局域网里的手机（无线连接用）。</summary>
+    public RelayCommand ScanLanCommand { get; }
 
     public RelayCommand BrowseWavCommand { get; }
 
@@ -677,6 +681,90 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         }
     }
+
+    /// <summary>扫描结果文字（无线连接）。</summary>
+    public string LanScanText
+    {
+        get => _lanScanText;
+        private set
+        {
+            if (Set(ref _lanScanText, value))
+            {
+                OnPropertyChanged(nameof(HasLanScanResult));
+            }
+        }
+    }
+
+    public bool HasLanScanResult => !string.IsNullOrEmpty(_lanScanText);
+
+    /// <summary>
+    /// 扫一遍局域网：广播探测 → 手机应答 → 拿到 IP 和设备名。
+    ///
+    /// 用一个**临时 transport**（绑定随机端口），不碰正在跑的引擎：
+    /// 扫描是随时想扫就扫的操作，不应该要求先停止接收。
+    /// </summary>
+    private void ScanLan()
+    {
+        if (_lanScanning)
+        {
+            return;
+        }
+
+        _lanScanning = true;
+        LanScanText = "正在扫描局域网…";
+        var port = _audioPort;
+
+        _ = Task.Run(() =>
+        {
+            IReadOnlyList<DiscoveredPhone> found;
+            try
+            {
+                using var transport = new UdpAudioTransport(0);
+                found = LanDiscovery.Discover(transport, port, 1200);
+            }
+            catch (Exception ex)
+            {
+                found = Array.Empty<DiscoveredPhone>();
+                _dispatcher.Invoke(() =>
+                {
+                    _lanScanning = false;
+                    LanScanText = "扫描失败：" + ex.Message;
+                });
+                return;
+            }
+
+            _dispatcher.Invoke(() =>
+            {
+                _lanScanning = false;
+
+                if (found.Count == 0)
+                {
+                    LanScanText =
+                        "没扫到手机。确认手机和电脑在同一个 WiFi、手机 App 已启动；" +
+                        "若仍扫不到，多半是 Windows 防火墙拦了入站 UDP，" +
+                        "手动填手机 IP 一样能用（手机「设置」页里有本机地址）。";
+                    return;
+                }
+
+                LanScanText = "发现 " + string.Join(
+                    "、",
+                    found.Select(p => $"{p.Name ?? "未命名手机"}（{p.Address}）"));
+
+                // 只发现一台时直接填进地址栏，省一次复制粘贴。
+                // 不自动切到手动模式：自动模式本来就会把手动地址当兜底。
+                if (found.Count == 1 && string.IsNullOrWhiteSpace(_manualTarget))
+                {
+                    ManualTarget = found[0].Address.ToString();
+                }
+
+                AppendLog($"[无线] 局域网发现 {found.Count} 台：" +
+                          string.Join("、", found.Select(p => $"{p.Name ?? "?"}@{p.Address}")));
+            });
+        });
+    }
+
+    private bool _lanScanning;
+    private string _lanScanText = string.Empty;
 
     /// <summary>「自动发现」单选按钮。</summary>
     public bool AutoDiscover    {
