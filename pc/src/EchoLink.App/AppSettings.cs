@@ -31,6 +31,9 @@ public sealed class AppSettings
 
     public bool EnableKeepAlive { get; set; } = true;
 
+    /// <summary>点关闭时收进托盘而不是退出。默认开：这是个长时间挂着的音频工具。</summary>
+    public bool CloseToTray { get; set; } = true;
+
     /// <summary>手机端音量百分比（0–100）。100 = 原始音量。</summary>
     public double PhoneVolumePercent { get; set; } = 100;
 

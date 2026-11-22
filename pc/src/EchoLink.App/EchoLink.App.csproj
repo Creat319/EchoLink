@@ -4,6 +4,10 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+
+    <!-- 托盘图标用 WinForms 的 NotifyIcon：WPF 自己没有托盘 API，
+         自己 P/Invoke Shell_NotifyIcon 要额外处理窗口消息、菜单坐标和图标销毁，不值得 -->
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>EchoLink.App</RootNamespace>
     <AssemblyName>EchoLink.App</AssemblyName>
 
@@ -13,6 +17,14 @@
     <!-- WPF 里不需要 ApplicationConfiguration.Initialize()，入口由 App.xaml 负责 -->
     <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 打开 UseWindowsForms 后 SDK 会把 System.Windows.Forms / System.Drawing 塞进全局 using，
+         于是 Application、UserControl、Brush 这些名字和 WPF 撞成二义性。
+         这里把它们从全局 using 摘掉；只有 TrayIcon.cs 里显式 using 那两个命名空间。 -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Material Design in XAML -->

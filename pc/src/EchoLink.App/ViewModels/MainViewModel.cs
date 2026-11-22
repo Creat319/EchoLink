@@ -61,6 +61,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _isVolumeControlSupported = true;
     private long _lastVolumeSaveMs;
 
+    /// <summary>关闭窗口时收进托盘。</summary>
+    private bool _closeToTray = true;
+
     // ---------------- 上行麦克风 ----------------
     private bool _enableMic;
     private DeviceItem? _selectedMicDevice;
@@ -659,6 +662,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string VolumeHintText => _isVolumeControlSupported
         ? "拖动即时生效，只改 EchoLink 自己的播放增益"
         : "手机端版本过旧，暂不支持音量控制——请更新手机端 APK";
+
+    /// <summary>
+    /// 点关闭时收进托盘（而不是退出）。改了会立刻影响下一次点关闭。
+    /// </summary>
+    public bool CloseToTray
+    {
+        get => _closeToTray;
+        set
+        {
+            if (Set(ref _closeToTray, value))
+            {
+                App.CloseToTray = value;
+            }
+        }
+    }
 
     /// <summary>「自动发现」单选按钮。</summary>
     public bool AutoDiscover    {
@@ -1525,6 +1543,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _wavDumpEnabled = _settings.WavDumpEnabled;
         _wavDumpPath = _settings.WavDumpPath;
         _phoneVolumePercent = Math.Clamp(_settings.PhoneVolumePercent, 0, 100);
+        _closeToTray = _settings.CloseToTray;
+        App.CloseToTray = _settings.CloseToTray;
         _enableMic = _settings.EnableMic;
 
         SelectedDevice = null;
@@ -1556,6 +1576,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _settings.WavDumpEnabled = _wavDumpEnabled;
         _settings.WavDumpPath = _wavDumpPath;
         _settings.PhoneVolumePercent = _phoneVolumePercent;
+        _settings.CloseToTray = _closeToTray;
         _settings.EnableMic = _enableMic;
         _settings.MicDeviceId = _selectedMicDevice?.Id;
         _settings.MicDeviceName = _selectedMicDevice?.Name ?? "（未选择虚拟麦克风）";
