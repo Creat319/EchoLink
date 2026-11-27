@@ -8,11 +8,41 @@
     Title="EchoLink · PC 发送端">
 
     <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--
+            自绘标题栏：Win10 上 DWM 的 DWMWA_USE_IMMERSIVE_DARK_MODE 对 WinUI 3 窗口无效
+            （调用返回成功但标题栏仍是系统浅色），只能 ExtendsContentIntoTitleBar 自己画。
+            见 MainWindow.xaml.cs 的 ApplyTitleBarLayout。
+        -->
+        <Grid x:Name="AppTitleBar" Height="36" Grid.Row="0"
+              Background="{ThemeResource TitleBarBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="TitleBarLeftInset" Width="0" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="TitleBarRightInset" Width="0" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="14,0,0,0" Spacing="8">
+                <Image Source="ms-appx:///Assets/logo.png" Width="16" Height="16" />
+                <TextBlock Text="EchoLink" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{ThemeResource BodyBrush}" />
+                <TextBlock Text="{Binding LinkStateText}" FontSize="12"
+                           Foreground="{Binding LinkStateColor, Converter={StaticResource HexToBrush}}" />
+            </StackPanel>
+        </Grid>
+
         <!--
             用原生 NavigationView：侧边栏的展开/收起动画、选中指示条、紧凑模式、
             键盘导航、PaneFooter 都是它自带的。上一版手搓 ListBox 是无谓的倒退。
         -->
         <NavigationView x:Name="Nav"
+                        Grid.Row="1"
                         PaneDisplayMode="Left"
                         OpenPaneLength="220"
                         CompactPaneLength="48"

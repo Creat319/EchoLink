@@ -24,6 +24,7 @@
                     <SolidColorBrush x:Key="AccentBrush" Color="#64D2FF" />
                     <SolidColorBrush x:Key="PositiveBrush" Color="#7EE2B8" />
                     <SolidColorBrush x:Key="WarnBrush" Color="#FFC46B" />
+                    <SolidColorBrush x:Key="TitleBarBrush" Color="#0B1016" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
@@ -35,6 +36,7 @@
                     <SolidColorBrush x:Key="AccentBrush" Color="#0A7EA4" />
                     <SolidColorBrush x:Key="PositiveBrush" Color="#12805C" />
                     <SolidColorBrush x:Key="WarnBrush" Color="#9A5B00" />
+                    <SolidColorBrush x:Key="TitleBarBrush" Color="#EEF2F7" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

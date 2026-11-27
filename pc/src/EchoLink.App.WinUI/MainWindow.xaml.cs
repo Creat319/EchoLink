@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
         // 首帧应用外观（主题 + 材质）。放在子控件都加载完之后。
         Root.Loaded += (_, _) =>
         {
+            ApplyTitleBarLayout();
             ApplyTheme();
             ApplyBackdrop();
             SyncNavSelection();
@@ -37,7 +38,11 @@ public sealed partial class MainWindow : Window
         };
 
         // 跟随系统主题时，ActualTheme 会随系统变化
-        Root.ActualThemeChanged += (_, _) => ApplyRootBackground();
+        Root.ActualThemeChanged += (_, _) =>
+        {
+            ApplyRootBackground();
+            UpdateTitleArea();
+        };
     }
 
     /// <summary>设置页里显示的材质可用性说明。</summary>
@@ -154,24 +159,62 @@ public sealed partial class MainWindow : Window
             : Windows.UI.Color.FromArgb(255, 0xF3, 0xF5, 0xF9));
     }
 
-    /// <summary>标题栏按钮在纯色背景上要跟主题走，否则深色底上会出现浅色条带。</summary>
+    // ---------------------------------------------------------------- 系统标题栏
+
+    /// <summary>
+    /// 自绘标题栏：把内容延伸到标题栏区域，自己画。
+    ///
+    /// 为什么不用 DWM：`DWMWA_USE_IMMERSIVE_DARK_MODE` 在 WinUI 3 窗口上调用返回 0（成功），
+    /// 但系统标题栏颜色纹丝不动——实测过，深色主题下标题栏依旧是纯白，和窗口拼在一起很突兀。
+    /// 唯一可靠的办法是 ExtendsContentIntoTitleBar + SetTitleBar。
+    ///
+    /// 两个 inset 列用来避开系统画的窗口按钮（最小化/最大化/关闭），
+    /// 单位是 DIP，所以要除以缩放比例。
+    /// </summary>
+    private void ApplyTitleBarLayout()
+    {
+        try
+        {
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(AppTitleBar);
+
+            var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
+            var titleBar = AppWindow.TitleBar;
+            TitleBarLeftInset.Width = new GridLength(titleBar.LeftInset / scale);
+            TitleBarRightInset.Width = new GridLength(titleBar.RightInset / scale);
+        }
+        catch (Exception)
+        {
+            // 拿不到 AppWindow（极少数环境）时退回系统标题栏，不影响可用性
+        }
+    }
+
     private void UpdateTitleArea()
     {
         try
         {
             var titleBar = AppWindow.TitleBar;
             var dark = Root.ActualTheme != ElementTheme.Light;
+
+            // 窗口按钮画在我们的标题栏上，颜色要跟着主题走，否则深色底上是黑压黑
             titleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            titleBar.ButtonHoverBackgroundColor = dark
+                ? Windows.UI.Color.FromArgb(40, 255, 255, 255)
+                : Windows.UI.Color.FromArgb(24, 0, 0, 0);
             titleBar.ButtonForegroundColor = dark
                 ? Windows.UI.Color.FromArgb(255, 0xE4, 0xEB, 0xF2)
                 : Windows.UI.Color.FromArgb(255, 0x1B, 0x24, 0x30);
+            titleBar.ButtonInactiveForegroundColor = dark
+                ? Windows.UI.Color.FromArgb(255, 0x7C, 0x8B, 0x9B)
+                : Windows.UI.Color.FromArgb(255, 0x6B, 0x78, 0x86);
         }
         catch (Exception)
         {
             // 自定义标题栏颜色在部分环境下会抛，忽略即可
         }
     }
+
 
     /// <summary>
     /// 应用窗口材质。Mica 需要 Windows 11；Windows 10 上只能毛玻璃（Acrylic）。
