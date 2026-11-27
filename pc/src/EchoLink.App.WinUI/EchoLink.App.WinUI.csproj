@@ -59,4 +59,31 @@
              Text="WinUI：已把 @(WinUICrInclude->Count()) 个编译资源（xbf/pri）复制到发布目录" />
   </Target>
 
+  <!--
+    瘦身：Windows App SDK 1.8 的自包含负载里带了一整套 AI/ML 运行时，这个应用一个字都用不到：
+      onnxruntime.dll                            20.7 MB
+      DirectML.dll                               17.8 MB
+      Microsoft.Windows.AI.MachineLearning.dll    0.9 MB
+      Microsoft.Windows.Widgets.dll               2.3 MB（小组件，未使用）
+      NpuDetect\                                  0.3 MB
+    合计约 42 MB。逐个删掉后实测：窗口、四页导航、WASAPI 设备枚举（7 个端点）均正常。
+
+    注意：**不要**删 WinUIEdit.dll —— 它负责 XAML 的文本控件，
+    删掉后任何 TextBox 都会让 XamlParseException 炸掉整个窗口（踩过一次）。
+  -->
+  <Target Name="TrimUnusedWinAppSdkPayload" AfterTargets="Publish">
+    <ItemGroup>
+      <UnusedPayload Include="$(PublishDir)onnxruntime.dll;
+                               $(PublishDir)DirectML.dll;
+                               $(PublishDir)Microsoft.Windows.AI.MachineLearning.dll;
+                               $(PublishDir)Microsoft.Windows.Widgets.dll" />
+    </ItemGroup>
+
+    <Delete Files="@(UnusedPayload)" ContinueOnError="true" />
+    <RemoveDir Directories="$(PublishDir)NpuDetect" ContinueOnError="true" />
+
+    <Message Importance="high"
+             Text="瘦身：已移除未使用的 AI/ML 运行时与小组件（约 42 MB）" />
+  </Target>
+
 </Project>

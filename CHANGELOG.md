@@ -5,6 +5,69 @@
 
 ---
 
+## v0.6.5
+
+WinUI 版体积从 **138.6 MB 降到 96.6 MB**（−42 MB，−30%），压缩后下载包约 **33 MB**。
+
+### 钱都花在哪了
+
+Windows App SDK 1.8 的自包含负载里，带了一整套**我们完全用不到的 AI/ML 运行时**：
+
+| 文件 | 体积 | 用途 | 结论 |
+| --- | --- | --- | --- |
+| `onnxruntime.dll` | 20.7 MB | ONNX 推理 | 未使用，删 |
+| `DirectML.dll` | 17.8 MB | GPU 推理后端 | 未使用，删 |
+| `Microsoft.Windows.AI.MachineLearning.dll` | 0.9 MB | ML 封装 | 未使用，删 |
+| `Microsoft.Windows.Widgets.dll` | 2.3 MB | 桌面小组件 | 未使用，删 |
+| `NpuDetect\` | 0.3 MB | NPU 探测 | 未使用，删 |
+
+剩下的主体是必须的：`Microsoft.Windows.SDK.NET.dll`(23.7) + XAML 三件套(29.9) +
+DWriteCore/dwmcorei 等合成依赖。
+
+### 踩到的一个雷
+
+顺手把 `WinUIEdit.dll` 也删了试试，结果窗口直接起不来：
+
+```
+XamlParseException: Cannot create instance of type 'Microsoft.UI.Xaml.Controls.TextBox'
+```
+
+它负责 XAML 的文本控件，**不能删**。所以精简清单是逐个验证出来的，不是猜的。
+
+### 实现
+
+csproj 里加了 `TrimUnusedWinAppSdkPayload` 目标（`AfterTargets="Publish"`），
+每次发布自动清理，不需要手工删。
+
+> 注意：这次编辑时我一度把这个文件和 `CopyWinUICompiledResourcesToPublish`
+> （v0.6.1 修"打不开"的那个目标）搞混，把后者覆盖掉了。已复原并确认两个目标都在——
+> 否则会重新引入启动崩溃。
+
+### 验证
+
+| 项 | 结果 |
+| --- | --- |
+| 目录体积 | 138.6 → **96.6 MB** |
+| 压缩后 | **33 MB**（可直接发给别人） |
+| 启动 | ✅ 窗口正常 |
+| 四页导航 | ✅ 主控 / 高级 / 日志 / 设置 |
+| WASAPI 设备枚举 | ✅ 下拉 7 个端点（确认删 ML 没影响音频栈） |
+| xbf/pri 资源 | ✅ 7 个都在（v0.6.1 的修复没被破坏） |
+
+### 还能再小吗
+
+能，但都有代价，我没做：
+
+1. **语言资源**：76 个语言目录共 3 MB，只留中英可再省 3 MB。
+   代价是非中英系统下 WinUI 内置控件文字会回退英文。
+2. **不打包 Windows App SDK**（约 37.9 MB）：需要用户预装对应版本的
+   Windows App Runtime。本机试过启动失败（版本不匹配），要做得靠安装器分发运行时。
+3. **MSIX 打包**：运行时共享，用户实际下载能到 10–20 MB，但要证书签名。
+
+需要哪一种再告诉我。
+
+---
+
 ## v0.6.4
 
 修「标题栏和窗口格格不入」：标题栏原来是系统画的浅色条，下面接深色内容，非常割裂。
