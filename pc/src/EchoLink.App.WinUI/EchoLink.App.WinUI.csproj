@@ -39,4 +39,24 @@
     <Content Include="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    dotnet publish 不会把 WinUI 的编译产物带过去：
+      App.xbf / MainWindow.xbf / Controls\MetricRowControl.xbf  （编译后的 XAML）
+      EchoLink.App.WinUI.pri                                    （资源索引）
+    少了它们，发布版一启动就是 XamlParseException + 0xC000027B（Windows 10 22H2 上实测）。
+
+    bin 目录里能跑、发布目录里不能跑，就是这批文件没被复制导致的。
+  -->
+  <Target Name="CopyWinUICompiledResourcesToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <WinUICrInclude Include="$(TargetDir)**\*.xbf" />
+      <WinUICrInclude Include="$(TargetDir)*.pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WinUICrInclude)"
+          DestinationFiles="@(WinUICrInclude->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high"
+             Text="WinUI：已把 @(WinUICrInclude->Count()) 个编译资源（xbf/pri）复制到发布目录" />
+  </Target>
+
 </Project>

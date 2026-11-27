@@ -5,6 +5,52 @@
 
 ---
 
+## v0.6.1
+
+**修 WinUI 版"打不开"**。这是我上一版的打包错误，不是环境问题。
+
+### 现象与根因
+
+双击 `EchoLink.App.WinUI.exe` 没有任何反应（或一闪而过），进程退出码 `0xC000027B`。
+
+根因：**`dotnet publish` 没有把 WinUI 的编译产物复制到发布目录**：
+
+```
+App.xbf                          ← 编译后的 App.xaml
+MainWindow.xbf                   ← 编译后的主窗口
+Controls\MetricRowControl.xbf
+EchoLink.App.WinUI.pri           ← XAML 资源索引
+```
+
+少了这些，`InitializeComponent()` 直接抛 `XamlParseException: XAML parsing failed`，
+而 WinUI 启动阶段的异常会让进程静默消失，用户只看到"打不开"。
+
+`bin\Release` 目录里是能跑的（那些文件都在），所以我上次只验证了 `bin` 就发布了——
+**发布目录的副本我没有自己跑过**，这是我的疏漏。
+
+### 修法
+
+1. csproj 里加了 `CopyWinUICompiledResourcesToPublish` 目标，
+   把 `**\*.xbf` 与 `*.pri` 显式复制到 `$(PublishDir)`。
+2. 启动失败时**弹出消息框**显示异常与日志路径（用 Win32 `MessageBoxW`，
+   不依赖 XAML——XAML 坏了的时候它还能用），不再让进程静默消失。
+
+### 验证
+
+| 项 | 结果 |
+| --- | --- |
+| 发布目录关键文件 | ✅ 7 个 xbf/pri 全部就位 |
+| 直接运行发布目录的 exe | ✅ 窗口正常，93 个可访问元素 |
+| **把整个文件夹复制到别处再运行** | ✅ 正常（排除路径依赖） |
+| 三页导航 / 设备下拉 | ✅ 均可切换与展开 |
+
+### 说明
+
+- 只改了 PC 端的打包与启动兜底，音频链路、手机端都没有改动。
+- 体积仍是 138 MB（WinAppSDK 自包含），瘦身需要安装器方案，未做。
+
+---
+
 ## v0.6.0
 
 **新增 WinUI 3 客户端**：`EchoLink.App.WinUI`。WPF 版保留，两者共用同一套 ViewModel。

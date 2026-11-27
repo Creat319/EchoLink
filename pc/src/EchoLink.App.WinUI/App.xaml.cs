@@ -95,5 +95,25 @@ public partial class App : Application
         catch
         {
         }
+
+        // WinUI 启动失败时进程会静默消失（退出码 0xC000027B），用户只看到"打不开"。
+        // 这里用最原始的 Win32 弹窗把原因和日志路径显示出来——它不依赖 XAML，
+        // 也就不会在 XAML 本身坏了的时候一起失效。
+        try
+        {
+            ShowFatalMessage(
+                "EchoLink 启动失败\n\n" +
+                ex.Message + "\n\n" +
+                "详细日志：" + CrashLogPath);
+        }
+        catch
+        {
+        }
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
+
+    private static void ShowFatalMessage(string text)
+        => MessageBoxW(IntPtr.Zero, text, "EchoLink", 0x00000010 /* MB_ICONERROR */);
 }
