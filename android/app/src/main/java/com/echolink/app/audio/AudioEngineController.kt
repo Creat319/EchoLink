@@ -388,9 +388,17 @@ class AudioEngineController(
         lastBufferBumpMs = nowMs
         lastBufferBumpUnderruns = stats.underrunEvents
 
-        val attempt = bufferBursts + 1
-        val frames = activeEngine.setBufferSizeInBursts(attempt)
         val burst = stats.framesPerBurst
+        val burstMs = if (burst > 0) burst * 1000.0 / Protocol.SAMPLE_RATE else 0.0
+
+        // 一次跳到"够用"的档位，而不是每次 +1（见 BufferSizing 的说明）
+        val attempt = BufferSizing.nextBursts(
+            targetWaterMs = targetWaterMs,
+            burstMs = burstMs,
+            currentBursts = bufferBursts,
+            maxBursts = MAX_BUFFER_BURSTS,
+        )
+        val frames = activeEngine.setBufferSizeInBursts(attempt)
         val cause = if (underrunWants) {
             "欠载 +$underrunDelta 次"
         } else {
@@ -402,7 +410,11 @@ class AudioEngineController(
             val actualBursts = frames / burst
             if (actualBursts > bufferBursts) {
                 bufferBursts = actualBursts
-                log("缓冲上调到 $bufferBursts burst（$frames 帧 / ${"%.1f".format(stats.bufferMs)} ms）：$cause")
+                // 用帧数自己换算毫秒：stats.bufferMs 是**改之前**的采样值，
+                // 直接打出来会永远比实际小一档（日志里出现过"1024 帧 / 16.0 ms"，
+                // 实际 1024 帧 @48k 是 21.3 ms），排查时容易被带偏。
+                val actualMs = frames * 1000.0 / Protocol.SAMPLE_RATE
+                log("缓冲上调到 $bufferBursts burst（$frames 帧 / ${"%.1f".format(actualMs)} ms）：$cause")
             } else {
                 log("缓冲扩容未生效：请求 $attempt burst，设备实际仍是 $frames 帧 —— $cause")
             }
@@ -456,6 +468,27 @@ class AudioEngineController(
             phase = LinkPhase.FAULT
         } else {
             phase = LinkPhase.STREAMING
+
+            // 重开后原生侧会按默认 2 burst 重新开流，上一次调好的缓冲就丢了 ——
+            // 实测「耳机拔出」重开一次要白吃约 10 次欠载（2→3→4 burst 重走一遍）。
+            // 这里直接把上次的档位补回去。
+            if (bufferBursts > START_BUFFER_BURSTS) {
+                val restored = activeEngine.setBufferSizeInBursts(bufferBursts)
+                val burst = stats.framesPerBurst
+                if (restored > 0 && burst > 0) {
+                    val actual = restored / burst
+                    if (actual >= bufferBursts) {
+                        log("重开后缓冲已恢复到 $actual burst（$restored 帧）")
+                    } else {
+                        bufferBursts = actual.coerceAtLeast(START_BUFFER_BURSTS)
+                        log("重开后缓冲只恢复到 $actual burst，按实际值继续")
+                    }
+                }
+            }
+
+            // 重开算新的一轮：欠载计数基准与扩容节流都要重置，否则扩容逻辑会误判
+            lastBufferBumpMs = 0
+            lastBufferBumpUnderruns = stats.underrunEvents
         }
 
         lastCallbackCount = -1
