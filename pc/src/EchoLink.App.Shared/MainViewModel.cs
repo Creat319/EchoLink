@@ -357,7 +357,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     // ==================================================================== 导航
 
-    /// <summary>0 = 主控，1 = 高级，2 = 日志。</summary>
+    /// <summary>0 = 主控，1 = 高级，2 = 日志，3 = 设置。</summary>
     public int SelectedPageIndex
     {
         get => _selectedPageIndex;
@@ -371,6 +371,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(IsHomePage));
             OnPropertyChanged(nameof(IsAdvancedPage));
             OnPropertyChanged(nameof(IsLogPage));
+            OnPropertyChanged(nameof(IsSettingsPage));
             OnPropertyChanged(nameof(IsContentPage));
         }
     }
@@ -381,8 +382,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public bool IsLogPage => _selectedPageIndex == 2;
 
-    /// <summary>日志页占满整块区域，此时隐藏两栏主体。</summary>
-    public bool IsContentPage => _selectedPageIndex != 2;
+    /// <summary>设置页（WinUI 用 NavigationView 的内置设置项，索引固定 3）。</summary>
+    public bool IsSettingsPage => _selectedPageIndex == 3;
+
+    /// <summary>日志页占满整块区域，此时隐藏两栏主体；设置页也是整块。</summary>
+    public bool IsContentPage => _selectedPageIndex is 0 or 1;
 
     public bool HasUpdate
     {
@@ -779,6 +783,77 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _probingPeriods;
     private string _lanScanText = string.Empty;
 
+    /// <summary>
+    /// 主题：0 = 跟随系统，1 = 浅色，2 = 深色。
+    /// 存的是索引，方便直接绑定 RadioButtons / ComboBox.SelectedIndex。
+    /// </summary>
+    public int ThemeModeIndex
+    {
+        get => _themeModeIndex;
+        set
+        {
+            if (!Set(ref _themeModeIndex, Math.Clamp(value, 0, 2)))
+            {
+                return;
+            }
+
+            _settings.ThemeMode = _themeModeIndex switch
+            {
+                1 => "light",
+                2 => "dark",
+                _ => "system",
+            };
+            SaveSettings();
+        }
+    }
+
+    /// <summary>窗口材质：0 = 自动，1 = 无，2 = 云母（Win11），3 = 毛玻璃。</summary>
+    public int BackdropIndex
+    {
+        get => _backdropIndex;
+        set
+        {
+            if (!Set(ref _backdropIndex, Math.Clamp(value, 0, 3)))
+            {
+                return;
+            }
+
+            _settings.Backdrop = _backdropIndex switch
+            {
+                1 => "none",
+                2 => "mica",
+                3 => "acrylic",
+                _ => "auto",
+            };
+            SaveSettings();
+        }
+    }
+
+    /// <summary>主题设置的持久化字段。</summary>
+    private int _themeModeIndex;
+
+    /// <summary>材质设置的持久化字段。</summary>
+    private int _backdropIndex;
+
+    /// <summary>
+    /// 地址模式的索引形式：0 = 自动发现，1 = 手动指定。
+    /// 界面上用 RadioButtons.SelectedIndex 绑定，比两个互斥的 bool 干净。
+    /// </summary>
+    public int AddressModeIndex
+    {
+        get => _autoDiscover ? 0 : 1;
+        set
+        {
+            var auto = value == 0;
+            if (Set(ref _autoDiscover, auto))
+            {
+                OnPropertyChanged(nameof(AutoDiscover));
+                OnPropertyChanged(nameof(ManualMode));
+                OnPropertyChanged(nameof(AddressModeIndex));
+            }
+        }
+    }
+
     /// <summary>「自动发现」单选按钮。</summary>
     public bool AutoDiscover    {
         get => _autoDiscover;
@@ -787,6 +862,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (Set(ref _autoDiscover, value))
             {
                 OnPropertyChanged(nameof(ManualMode));
+                OnPropertyChanged(nameof(AddressModeIndex));
             }
         }
     }
@@ -1637,6 +1713,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _phoneVolumePercent = Math.Clamp(_settings.PhoneVolumePercent, 0, 100);
         _closeToTray = _settings.CloseToTray;
         ShellSettings.CloseToTray = _settings.CloseToTray;
+        _themeModeIndex = _settings.ThemeMode switch
+        {
+            "light" => 1,
+            "dark" => 2,
+            _ => 0,
+        };
+        _backdropIndex = _settings.Backdrop switch
+        {
+            "none" => 1,
+            "mica" => 2,
+            "acrylic" => 3,
+            _ => 0,
+        };
         _enableMic = _settings.EnableMic;
 
         SelectedDevice = null;
@@ -1669,6 +1758,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _settings.WavDumpPath = _wavDumpPath;
         _settings.PhoneVolumePercent = _phoneVolumePercent;
         _settings.CloseToTray = _closeToTray;
+        _settings.ThemeMode = _themeModeIndex switch
+        {
+            1 => "light",
+            2 => "dark",
+            _ => "system",
+        };
+        _settings.Backdrop = _backdropIndex switch
+        {
+            1 => "none",
+            2 => "mica",
+            3 => "acrylic",
+            _ => "auto",
+        };
         _settings.EnableMic = _enableMic;
         _settings.MicDeviceId = _selectedMicDevice?.Id;
         _settings.MicDeviceName = _selectedMicDevice?.Name ?? "（未选择虚拟麦克风）";

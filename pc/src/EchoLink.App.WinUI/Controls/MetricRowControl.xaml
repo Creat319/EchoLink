@@ -4,7 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid Margin="0,3">
+    <Grid Margin="0,4">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
@@ -12,13 +12,13 @@
 
         <StackPanel Grid.Column="0" VerticalAlignment="Center">
             <TextBlock Text="{x:Bind Label, Mode=OneWay}"
-                       FontSize="12.5"
-                       Foreground="{StaticResource MutedBrush}" />
+                       FontSize="13"
+                       Foreground="{ThemeResource MutedBrush}" />
             <TextBlock x:Name="HintText"
                        Text="{x:Bind Hint, Mode=OneWay}"
-                       FontSize="10.5"
-                       Foreground="{StaticResource MutedBrush}"
-                       Opacity="0.7" />
+                       FontSize="11"
+                       Foreground="{ThemeResource MutedBrush}"
+                       Opacity="0.75" />
         </StackPanel>
 
         <TextBlock Grid.Column="1"
@@ -28,6 +28,6 @@
                    HorizontalAlignment="Right"
                    VerticalAlignment="Center"
                    TextAlignment="Right"
-                   Foreground="{StaticResource BodyBrush}" />
+                   Foreground="{ThemeResource BodyBrush}" />
     </Grid>
 </UserControl>

@@ -10,40 +10,64 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- 颜色与样式放在 App 级：UserControl（MetricRowControl）里也要能解析到 -->
-            <SolidColorBrush x:Key="BodyBrush" Color="#E4EBF2" />
-            <SolidColorBrush x:Key="MutedBrush" Color="#93A4B8" />
-            <SolidColorBrush x:Key="CardBgBrush" Color="#121A24" />
-            <SolidColorBrush x:Key="CardBorderBrush" Color="#1C2733" />
-            <SolidColorBrush x:Key="InsetBrush" Color="#0C121A" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#64D2FF" />
-            <SolidColorBrush x:Key="GreenBrush" Color="#7EE2B8" />
-            <SolidColorBrush x:Key="AmberBrush" Color="#FFC46B" />
+            <!--
+                颜色必须走主题字典：写死深色的话，切到亮色主题整片都是黑底黑字。
+                引用时用 {ThemeResource ...}（不是 StaticResource），切换主题才会实时生效。
+            -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="BodyBrush" Color="#E4EBF2" />
+                    <SolidColorBrush x:Key="MutedBrush" Color="#93A4B8" />
+                    <SolidColorBrush x:Key="CardBgBrush" Color="#1A222C" />
+                    <SolidColorBrush x:Key="CardBorderBrush" Color="#2A3644" />
+                    <SolidColorBrush x:Key="InsetBrush" Color="#0F151C" />
+                    <SolidColorBrush x:Key="AccentBrush" Color="#64D2FF" />
+                    <SolidColorBrush x:Key="PositiveBrush" Color="#7EE2B8" />
+                    <SolidColorBrush x:Key="WarnBrush" Color="#FFC46B" />
+                </ResourceDictionary>
+
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="BodyBrush" Color="#1B2430" />
+                    <SolidColorBrush x:Key="MutedBrush" Color="#5C6B7C" />
+                    <SolidColorBrush x:Key="CardBgBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CardBorderBrush" Color="#E2E8F0" />
+                    <SolidColorBrush x:Key="InsetBrush" Color="#F2F5F9" />
+                    <SolidColorBrush x:Key="AccentBrush" Color="#0A7EA4" />
+                    <SolidColorBrush x:Key="PositiveBrush" Color="#12805C" />
+                    <SolidColorBrush x:Key="WarnBrush" Color="#9A5B00" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
 
             <local:BoolToVisibilityConverter x:Key="BoolToVis" />
             <local:HexToBrushConverter x:Key="HexToBrush" />
             <local:BoolToBrushConverter x:Key="BoolToBrush" />
 
             <Style x:Key="CardStyle" TargetType="Border">
-                <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
-                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                <Setter Property="Background" Value="{ThemeResource CardBgBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="12" />
-                <Setter Property="Padding" Value="16" />
-                <Setter Property="Margin" Value="0,0,0,12" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="20" />
+                <Setter Property="Margin" Value="0,0,0,16" />
             </Style>
 
             <Style x:Key="SectionStyle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="FontSize" Value="14" />
                 <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
-                <Setter Property="Margin" Value="0,0,0,10" />
+                <Setter Property="Foreground" Value="{ThemeResource BodyBrush}" />
+                <Setter Property="Margin" Value="0,0,0,16" />
             </Style>
 
             <Style x:Key="HintStyle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="11" />
-                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{ThemeResource MutedBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+
+            <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{ThemeResource MutedBrush}" />
+                <Setter Property="Margin" Value="0,0,0,4" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>
