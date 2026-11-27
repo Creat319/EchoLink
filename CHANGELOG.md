@@ -65,6 +65,18 @@
 | `artifacts/EchoLink-Setup-0.7.0.exe` | 76 MB | 单文件安装包 |
 | `artifacts/pc-winui/` | 96.6 MB | 绿色版目录（需已装 .NET 8 桌面运行时） |
 | `artifacts/pc/` | — | WPF 版，保留可回退 |
+| `artifacts/echolink-arm64-debug.apk` | 13.35 MB | 手机端，versionCode 31 / 0.7.0 |
+
+### 顺带修的一个疏漏：手机端 APK 一直没重新打包
+
+`android/app/build.gradle.kts` 的版本号从 v0.6.0 起每版都改了，但 **APK 自 0.5.2 之后就没再构建过**——
+`artifacts/echolink-arm64-debug.apk` 里实际是 `versionCode=24 / 0.5.2`（用 aapt2 查出来的）。
+
+后果：手机端显示与「检查更新」比较的都还是旧版本号，会一直以为自己是 0.5.2。
+这次重新构建并核对：`versionCode=31 / versionName=0.7.0`，96 个单元测试全过。
+
+> 手机端代码自 0.5.2 起没有功能改动，所以这个 APK 的行为与之前一致，
+> 差别只在版本号本身——而版本号正是更新自检的依据。
 
 ---
 
