@@ -33,7 +33,11 @@ public sealed partial class MainWindow : Window
             ApplyTheme();
             ApplyBackdrop();
             SyncNavSelection();
+            UpdateTitleArea();
         };
+
+        // 跟随系统主题时，ActualTheme 会随系统变化
+        Root.ActualThemeChanged += (_, _) => ApplyRootBackground();
     }
 
     /// <summary>设置页里显示的材质可用性说明。</summary>
@@ -123,6 +127,50 @@ public sealed partial class MainWindow : Window
             2 => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
+
+        // 主题一变，纯色背景也要跟着换（浅色下用深色底就是黑屏）
+        ApplyRootBackground();
+        UpdateTitleArea();
+    }
+
+    /// <summary>
+    /// 根容器的背景。
+    ///
+    /// 有材质时必须是透明的——不透明就把云母/毛玻璃盖住了；
+    /// **没有材质时必须自己画背景**，否则窗口没有任何东西在绘制底图，
+    /// 深色主题下会大片发白/发空（这就是「材质选无 + 深色 → 内容看不见」的原因）。
+    /// </summary>
+    private void ApplyRootBackground()
+    {
+        if (SystemBackdrop is not null)
+        {
+            Root.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            return;
+        }
+
+        var dark = Root.ActualTheme != ElementTheme.Light;
+        Root.Background = new SolidColorBrush(dark
+            ? Windows.UI.Color.FromArgb(255, 0x0F, 0x14, 0x1A)
+            : Windows.UI.Color.FromArgb(255, 0xF3, 0xF5, 0xF9));
+    }
+
+    /// <summary>标题栏按钮在纯色背景上要跟主题走，否则深色底上会出现浅色条带。</summary>
+    private void UpdateTitleArea()
+    {
+        try
+        {
+            var titleBar = AppWindow.TitleBar;
+            var dark = Root.ActualTheme != ElementTheme.Light;
+            titleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+            titleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            titleBar.ButtonForegroundColor = dark
+                ? Windows.UI.Color.FromArgb(255, 0xE4, 0xEB, 0xF2)
+                : Windows.UI.Color.FromArgb(255, 0x1B, 0x24, 0x30);
+        }
+        catch (Exception)
+        {
+            // 自定义标题栏颜色在部分环境下会抛，忽略即可
+        }
     }
 
     /// <summary>
@@ -203,6 +251,7 @@ public sealed partial class MainWindow : Window
         }
 
         BackdropStatus = note;
+        ApplyRootBackground();
         Bindings.Update();
     }
 
