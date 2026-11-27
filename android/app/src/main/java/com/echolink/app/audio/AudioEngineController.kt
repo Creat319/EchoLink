@@ -102,7 +102,11 @@ class AudioEngineController(
             val newEngine = NativeAudioEngine()
             engine = newEngine
 
-            val startResult = newEngine.start(Protocol.SAMPLE_RATE, newSettings.requestExclusive)
+            val startResult = newEngine.start(
+                Protocol.SAMPLE_RATE,
+                newSettings.requestExclusive,
+                newSettings.mediaUsage,
+            )
             if (startResult != 0) {
                 log("音频流开流失败，返回码 $startResult（继续尝试收包）")
             }

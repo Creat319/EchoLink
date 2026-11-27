@@ -13,6 +13,7 @@ class SettingsStore(context: Context) {
         port = prefs.getInt(KEY_PORT, Protocol.DEFAULT_AUDIO_PORT),
         requestExclusive = prefs.getBoolean(KEY_EXCLUSIVE, true),
         autoTargetWater = prefs.getBoolean(KEY_AUTO_TARGET, true),
+        mediaUsage = prefs.getBoolean(KEY_MEDIA_USAGE, true),
         manualTargetWaterMs = prefs.getInt(KEY_MANUAL_TARGET, 30),
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
         micEnabled = prefs.getBoolean(KEY_MIC_ENABLED, true),
@@ -28,6 +29,7 @@ class SettingsStore(context: Context) {
             .putInt(KEY_PORT, settings.port)
             .putBoolean(KEY_EXCLUSIVE, settings.requestExclusive)
             .putBoolean(KEY_AUTO_TARGET, settings.autoTargetWater)
+            .putBoolean(KEY_MEDIA_USAGE, settings.mediaUsage)
             .putInt(KEY_MANUAL_TARGET, settings.manualTargetWaterMs)
             .putBoolean(KEY_KEEP_SCREEN_ON, settings.keepScreenOn)
             .putBoolean(KEY_MIC_ENABLED, settings.micEnabled)
@@ -61,6 +63,7 @@ class SettingsStore(context: Context) {
         const val KEY_PORT = "port"
         const val KEY_EXCLUSIVE = "exclusive"
         const val KEY_AUTO_TARGET = "auto_target"
+        const val KEY_MEDIA_USAGE = "media_usage"
         const val KEY_MANUAL_TARGET = "manual_target_ms"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         const val KEY_MIC_ENABLED = "mic_enabled"

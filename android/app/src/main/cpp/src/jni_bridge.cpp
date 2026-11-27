@@ -39,9 +39,9 @@ Java_com_echolink_app_audio_NativeAudioEngine_nativeDestroy(JNIEnv* /*env*/, job
 
 JNIEXPORT jint JNICALL
 Java_com_echolink_app_audio_NativeAudioEngine_nativeStart(
-        JNIEnv* /*env*/, jobject /*self*/, jlong handle, jint sampleRate, jboolean exclusive) {
+        JNIEnv* /*env*/, jobject /*self*/, jlong handle, jint sampleRate, jboolean exclusive, jboolean mediaUsage) {
     auto* engine = engineOf(handle);
-    return engine == nullptr ? -1 : engine->start(sampleRate, exclusive == JNI_TRUE);
+    return engine == nullptr ? -1 : engine->start(sampleRate, exclusive == JNI_TRUE, mediaUsage == JNI_TRUE);
 }
 
 JNIEXPORT jint JNICALL

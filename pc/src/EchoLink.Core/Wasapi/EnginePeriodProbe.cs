@@ -51,11 +51,16 @@ public static class EnginePeriodProbe
     {
         try
         {
-            using var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();
-            var device = enumerator.GetDefaultAudioEndpoint(
-                NAudio.CoreAudioApi.DataFlow.Render,
-                NAudio.CoreAudioApi.Role.Multimedia);
-            return (Probe(device.ID, device.FriendlyName), device.FriendlyName);
+            // 和 RefreshDevices 走同一套枚举（不用 NAudio）：某些机器上 NAudio 的
+            // MMDeviceEnumerator 会抛 COM 强转异常，导致这里静默返回 null。
+            var endpoints = AudioEndpointEnumerator.ListRender();
+            var device = endpoints.FirstOrDefault(e => e.IsDefault) ?? endpoints.FirstOrDefault();
+            if (device is null)
+            {
+                return null;
+            }
+
+            return (Probe(device.Id, device.FriendlyName), device.FriendlyName);
         }
         catch
         {

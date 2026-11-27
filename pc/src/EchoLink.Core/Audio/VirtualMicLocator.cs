@@ -72,41 +72,27 @@ public static class VirtualMicLocator
 
         try
         {
-            using var enumerator = new MMDeviceEnumerator();
+            // 与设备列表同一套枚举（不用 NAudio）：某些机器上 NAudio 的
+            // MMDeviceEnumerator 会抛 COM 强转异常，虚拟声卡检测会连带失效。
+            var captureEndpoints = Wasapi.AudioEndpointEnumerator.ListCapture();
+            var renderEndpoints = Wasapi.AudioEndpointEnumerator.ListRender();
 
-            string? defaultCaptureId = null;
-            try
-            {
-                defaultCaptureId = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia).ID;
-            }
-            catch
-            {
-                // 没有默认录音设备不影响扫描
-            }
+            var defaultCaptureId = captureEndpoints.FirstOrDefault(e => e.IsDefault)?.Id;
 
             var captures = new List<(string Id, string Name)>();
-            foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+            foreach (var device in captureEndpoints)
             {
-                try
+                if (!string.IsNullOrEmpty(device.Id))
                 {
-                    captures.Add((device.ID, device.FriendlyName));
-                }
-                catch
-                {
-                    // 个别设备读不到名字就跳过
+                    captures.Add((device.Id, device.FriendlyName));
                 }
             }
 
-            foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            foreach (var device in renderEndpoints)
             {
-                string id;
-                string name;
-                try
-                {
-                    id = device.ID;
-                    name = device.FriendlyName;
-                }
-                catch
+                var id = device.Id;
+                var name = device.FriendlyName;
+                if (string.IsNullOrEmpty(id))
                 {
                     continue;
                 }

@@ -14,8 +14,11 @@ class NativeAudioEngine : AutoCloseable {
 
     val isAlive: Boolean get() = handle != 0L
 
-    fun start(sampleRate: Int = Protocol.SAMPLE_RATE, exclusive: Boolean = true): Int =
-        nativeStart(handle, sampleRate, exclusive)
+    fun start(
+        sampleRate: Int = Protocol.SAMPLE_RATE,
+        exclusive: Boolean = true,
+        mediaUsage: Boolean = true,
+    ): Int = nativeStart(handle, sampleRate, exclusive, mediaUsage)
 
     fun stop(): Int = nativeStop(handle)
 
@@ -68,7 +71,12 @@ class NativeAudioEngine : AutoCloseable {
 
     private external fun nativeDestroy(handle: Long)
 
-    private external fun nativeStart(handle: Long, sampleRate: Int, exclusive: Boolean): Int
+    private external fun nativeStart(
+        handle: Long,
+        sampleRate: Int,
+        exclusive: Boolean,
+        mediaUsage: Boolean,
+    ): Int
 
     private external fun nativeStop(handle: Long): Int
 

@@ -690,8 +690,17 @@ private fun SettingsCard(
             Switch(
                 checked = state.settings.requestExclusive,
                 onCheckedChange = { onSettingsChange(state.settings.copy(requestExclusive = it)) },
-            )
-        }
+            )        }
+
+        // 音频用途：决定厂商 DSP 走哪条处理链。多扬声器设备（带分频/低音管理）
+        // 只有高音出声时，第一件事就是换这里试。
+        ToggleRow(
+            label = "按「媒体 / 音乐」播放",
+            hint = "关掉会按「游戏」声明。多扬声器设备低音单元不出声时，两个都试一下",
+            checked = state.settings.mediaUsage,
+            enabled = true,
+            onChange = { onSettingsChange(state.settings.copy(mediaUsage = it)) },
+        )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(Tr.t("自动目标水位"), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)

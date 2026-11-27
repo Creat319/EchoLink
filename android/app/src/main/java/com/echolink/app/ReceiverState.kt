@@ -19,6 +19,16 @@ data class ReceiverSettings(
     val port: Int = Protocol.DEFAULT_AUDIO_PORT,
     val requestExclusive: Boolean = true,
     val autoTargetWater: Boolean = true,
+
+    /**
+     * 按「媒体 / 音乐」声明音频用途（默认开启）。
+     *
+     * 只影响厂商 DSP 走哪条处理链，不影响延迟。EchoLink 放的就是音乐，
+     * 声明成游戏时，某些多扬声器设备（带分频 / 低音管理的平板）的音乐处理链
+     * 不参与，表现为只有高音单元出声。
+     */
+    val mediaUsage: Boolean = true,
+
     val manualTargetWaterMs: Int = 30,
     val keepScreenOn: Boolean = false,
 

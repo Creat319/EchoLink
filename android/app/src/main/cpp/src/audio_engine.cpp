@@ -63,7 +63,7 @@ AudioEngine::~AudioEngine() {
     stop();
 }
 
-int32_t AudioEngine::start(int32_t sampleRate, bool exclusive) {
+int32_t AudioEngine::start(int32_t sampleRate, bool exclusive, bool mediaUsage) {
     std::lock_guard<std::mutex> lock(_controlMutex);
     if (_stream) {
         return 0;
@@ -71,6 +71,7 @@ int32_t AudioEngine::start(int32_t sampleRate, bool exclusive) {
 
     _requestedSampleRate = sampleRate > 0 ? sampleRate : 48000;
     _exclusiveRequested = exclusive;
+    _mediaUsage = mediaUsage;
 
     {
         std::lock_guard<std::mutex> producerLock(_producerMutex);
@@ -209,9 +210,17 @@ int32_t AudioEngine::openStreamLocked(bool exclusive) {
                 ->setFormat(oboe::AudioFormat::I16)
                 ->setChannelCount(kOutputChannels)
                 ->setSampleRate(attempt.sampleRate)
-                ->setUsage(oboe::Usage::Game)
                 ->setDataCallback(this)
                 ->setErrorCallback(this);
+
+        // 用途/内容类型会决定厂商 DSP 走哪条处理链。EchoLink 放的是音乐，
+        // 声明成 Media/Music 才对——之前一律用 Game，某些多扬声器设备（如带
+        // 分频/低音管理的平板）的音乐处理链没参与，表现为只有高音单元出声。
+        if (_mediaUsage) {
+            builder.setUsage(oboe::Usage::Media)->setContentType(oboe::ContentType::Music);
+        } else {
+            builder.setUsage(oboe::Usage::Game)->setContentType(oboe::ContentType::Sonification);
+        }
 
         // 容量下限只在共享模式要：独占（MMAP）的缓冲由驱动固定，硬要容量反而会让
         // openStream 直接失败，白白丢掉独占的机会。共享模式才是我们能改缓冲的地方。
@@ -267,6 +276,15 @@ int32_t AudioEngine::openStreamLocked(bool exclusive) {
         LOGW("stream params differ: %d ch / %d bit (requested %d ch / 16 bit)",
              actualChannels, static_cast<int>(format), kOutputChannels);
     }
+
+    // 把真正开出来的流讲清楚：多扬声器设备"只有高音出声"这类问题，
+    // 第一件事就是确认走的是哪个设备、几声道、共享还是独占、用途是什么。
+    LOGI("stream opened: device=%d sharing=%s usage=%s content=%s rate=%d ch=%d burst=%d fmt=%d",
+         _stream->getDeviceId(),
+         sharing == oboe::SharingMode::Exclusive ? "exclusive" : "shared",
+         _stream->getUsage() == oboe::Usage::Media ? "media" : "game",
+         _stream->getContentType() == oboe::ContentType::Music ? "music" : "other",
+         actualRate, actualChannels, burst, static_cast<int>(format));
 
     // ---- Oboe 内部缓冲：2 个 burst ----
     // AAudio 保证回调尺寸 <= burst，所以 2 个 burst 就是官方推荐的低延迟起点。

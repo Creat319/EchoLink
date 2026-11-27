@@ -13,8 +13,8 @@ android {
         applicationId = "com.echolink.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.5.0"
+        versionCode = 23
+        versionName = "0.5.1"
 
         // 四种 ABI 全打：
         // - arm64-v8a：主流手机（性能最好，Oboe 低延迟路径最完整）

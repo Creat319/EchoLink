@@ -431,7 +431,28 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// <summary>后台探测所有渲染端点的最小周期，算出"还能省多少毫秒"。</summary>
     private async Task ProbeEndpointPeriodsAsync()
     {
+        // 探测要逐个开流查周期，重入会刷屏（旧版本在枚举失败的机器上出现过每秒三次的
+        // "开始探测/探测完成"循环）。这里直接挡掉重入。
+        if (_probingPeriods)
+        {
+            return;
+        }
+
+        _probingPeriods = true;
+        try
+        {
+            await ProbeEndpointPeriodsCoreAsync();
+        }
+        finally
+        {
+            _probingPeriods = false;
+        }
+    }
+
+    private async Task ProbeEndpointPeriodsCoreAsync()
+    {
         AppendLog("[端点] 开始探测各端点最小周期…");
+
         var snapshot = await Task.Run(() =>
         {
             var results = new List<(Core.Wasapi.EndpointPeriods Periods, bool IsCurrent)>();
@@ -764,6 +785,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     private bool _lanScanning;
+    private bool _probingPeriods;
     private string _lanScanText = string.Empty;
 
     /// <summary>「自动发现」单选按钮。</summary>
@@ -1248,27 +1270,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         string? defaultId = null;
         try
         {
-            using var enumerator = new MMDeviceEnumerator();
-            try
-            {
-                defaultId = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID;
-            }
-            catch (Exception ex)
-            {
-                AppendLog("读取默认输出端点失败（不影响枚举）：" + ex.Message);
-            }
+            // 不用 NAudio 的 MMDeviceEnumerator：某些机器上它会抛
+            // "Unable to cast object of type 'System.__ComObject' to type
+            // 'NAudio.CoreAudioApi.Interfaces.IMMDeviceEnumeratorComObject'"，导致整个
+            // 端点列表为空、探测到 0 个端点，最后只能按默认 10 ms 周期抓取。
+            // 这里改用项目自己的 COM 封装，与抓取/播放走同一套代码。
+            var endpoints = Core.Wasapi.AudioEndpointEnumerator.ListRender();
+            defaultId = endpoints.FirstOrDefault(e => e.IsDefault)?.Id;
 
-            foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            foreach (var device in endpoints)
             {
                 try
                 {
-                    var isDefault = device.ID == defaultId;
+                    var isDefault = device.IsDefault;
                     var isVirtual = LooksVirtual(device.FriendlyName);
                     var name = device.FriendlyName + (isDefault ? "  · 默认" : string.Empty) + (isVirtual ? "  · 虚拟" : string.Empty);
                     // 只读探测该端点的最小引擎周期：它决定抓取粒度，进而决定低延迟上限。
                     // 板载声卡常见 2.67 ms；虚拟声卡与 HDMI 通常只有 10 ms。
-                    var probe = EnginePeriodProbe.Probe(device.ID, device.FriendlyName);
-                    Devices.Add(new DeviceItem(name, device.ID, isDefault, isVirtual, probe.MinMs, probe.DefaultMs));
+                    var probe = EnginePeriodProbe.Probe(device.Id, device.FriendlyName);
+                    Devices.Add(new DeviceItem(name, device.Id, isDefault, isVirtual, probe.MinMs, probe.DefaultMs));
                 }
                 catch (Exception ex)
                 {

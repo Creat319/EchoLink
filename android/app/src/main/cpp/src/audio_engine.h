@@ -65,7 +65,7 @@ public:
     ~AudioEngine() override;
 
     // 控制线程调用
-    int32_t start(int32_t sampleRate, bool exclusive);
+    int32_t start(int32_t sampleRate, bool exclusive, bool mediaUsage);
     int32_t stop();
     int32_t reopen();  // 错误回调/看门狗触发：1) 设备路由变化 2) 回调停摆
 
@@ -90,6 +90,9 @@ public:
     }
 
     float gain() const { return _gainTarget.load(std::memory_order_relaxed); }
+
+    /// <summary>本次开流是否按&quot;媒体/音乐&quot;声明用途（影响厂商 DSP 是否参与）。</summary>
+    bool mediaUsage() const { return _mediaUsage; }
     double resampleRatio() const { return _ratio.load(std::memory_order_relaxed); }
 
     /// 请求重新垫水位（欠载过深时由控制线程调用，比靠比率慢慢抽干快得多）
@@ -132,6 +135,8 @@ private:
     // 音量（PC 端滑条 → 控制包 → 这里）。
     // _gainTarget 由控制线程写、音频线程读；_gainCurrent 只属于音频线程，
     // 在回调内做线性斜坡，避免拖动滑条时的"咔哒"声。
+    bool _mediaUsage = true;   // 媒体用途：让厂商的音乐 DSP（低音管理/分频）参与
+
     std::atomic<float> _gainTarget{1.0f};
     float _gainCurrent = 1.0f;
 
