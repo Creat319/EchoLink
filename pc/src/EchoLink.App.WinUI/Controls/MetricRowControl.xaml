@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="EchoLink.App.WinUI.Controls.MetricRowControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Margin="0,3">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+            <TextBlock Text="{x:Bind Label, Mode=OneWay}"
+                       FontSize="12.5"
+                       Foreground="{StaticResource MutedBrush}" />
+            <TextBlock x:Name="HintText"
+                       Text="{x:Bind Hint, Mode=OneWay}"
+                       FontSize="10.5"
+                       Foreground="{StaticResource MutedBrush}"
+                       Opacity="0.7" />
+        </StackPanel>
+
+        <TextBlock Grid.Column="1"
+                   Text="{x:Bind Value, Mode=OneWay}"
+                   FontSize="13"
+                   FontFamily="Cascadia Mono, Consolas"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   TextAlignment="Right"
+                   Foreground="{StaticResource BodyBrush}" />
+    </Grid>
+</UserControl>

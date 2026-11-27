@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    托盘图标单独成库。
+    原因：WinUI 工程一旦打开 UseWindowsForms，.NET SDK 会把 WindowsDesktop 的
+    WPF 标记编译目标也拉进来，直接报 MC6000（找不到 PresentationCore）。
+    放到独立 class library 里就互不干扰，WPF 版和 WinUI 版都能引用同一份实现。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>EchoLink.Tray</RootNamespace>
+    <AssemblyName>EchoLink.Tray</AssemblyName>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

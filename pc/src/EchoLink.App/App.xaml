@@ -14,6 +14,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <conv:HexToBrushConverter x:Key="HexToBrush" />
             <conv:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
             <conv:FractionWidthConverter x:Key="FractionWidth" />
 
@@ -24,29 +25,41 @@
 
             <!-- 不用 MaterialDesignPaper/CardBackground：默认是中性灰，和手机端深海军蓝不统一 -->
             <SolidColorBrush x:Key="AppBackground" Color="#0A0E13" />
-            <SolidColorBrush x:Key="AppCardBackground" Color="#111822" />
-            <SolidColorBrush x:Key="AppCardBorder" Color="#1E2A38" />
+            <SolidColorBrush x:Key="AppSidebar" Color="#0B1117" />
+            <SolidColorBrush x:Key="AppCardBackground" Color="#121A24" />
+            <SolidColorBrush x:Key="AppCardBorder" Color="#1C2733" />
             <SolidColorBrush x:Key="AppInset" Color="#0C121A" />
             <SolidColorBrush x:Key="AppBody" Color="#E4EBF2" />
+            <!-- 卡片标题与说明文字统一用这个中性色：强调色只留给"正在进行"和主操作 -->
+            <SolidColorBrush x:Key="AppMuted" Color="#93A4B8" />
 
             <!-- ================= 排版 ================= -->
             <Style x:Key="AppTitle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="19" />
+                <Setter Property="FontSize" Value="18" />
                 <Setter Property="FontWeight" Value="Bold" />
                 <Setter Property="Foreground" Value="{StaticResource AppBody}" />
             </Style>
 
             <Style x:Key="AppSubtitle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="12" />
-                <Setter Property="Opacity" Value="0.62" />
+                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="Opacity" Value="0.6" />
                 <Setter Property="Foreground" Value="{StaticResource AppBody}" />
             </Style>
 
+            <!-- 卡片标题：中性色 + 小一号。之前每个标题都是青色，等于满屏都是重点 -->
             <Style x:Key="SectionTitle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontSize" Value="12.5" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Margin" Value="0,0,0,10" />
-                <Setter Property="Foreground" Value="{StaticResource BrandCyan}" />
+                <Setter Property="Foreground" Value="{StaticResource AppMuted}" />
+            </Style>
+
+            <!-- 主角数字：端到端延迟 -->
+            <Style x:Key="HeroValue" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+                <Setter Property="FontSize" Value="34" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource BrandGreen}" />
             </Style>
 
             <Style x:Key="FieldLabel" TargetType="TextBlock">
@@ -66,17 +79,27 @@
             <!-- 用 Border 而不是 materialDesign:Card：圆角/描边/内边距完全可控，
                  也不依赖 MaterialDesignThemes 各版本间变化的 Card 属性 -->
             <Style x:Key="CardPanel" TargetType="Border">
-                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="CornerRadius" Value="14" />
                 <Setter Property="Background" Value="{StaticResource AppCardBackground}" />
                 <Setter Property="BorderBrush" Value="{StaticResource AppCardBorder}" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="Padding" Value="14" />
-                <Setter Property="Margin" Value="0,0,0,9" />
+                <Setter Property="Padding" Value="18" />
+                <Setter Property="Margin" Value="0,0,0,12" />
                 <Setter Property="SnapsToDevicePixels" Value="True" />
             </Style>
 
+            <!-- 主角区里的小统计块（水位 / 包每秒） -->
+            <Style x:Key="HeroStat" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource AppInset}" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="16,8" />
+                <Setter Property="Margin" Value="0,0,10,0" />
+                <Setter Property="MinWidth" Value="104" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
             <Style x:Key="CardPanelTight" TargetType="Border" BasedOn="{StaticResource CardPanel}">
-                <Setter Property="Padding" Value="12,10" />
+                <Setter Property="Padding" Value="14,12" />
                 <Setter Property="Margin" Value="0,0,0,10" />
             </Style>
 

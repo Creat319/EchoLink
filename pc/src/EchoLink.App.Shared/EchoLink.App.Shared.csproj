@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    与 UI 框架无关的界面逻辑：ViewModel、模型、配置。
+    WPF 版和 WinUI 版共用这一份，避免两份 1600 行的 ViewModel 各自漂移。
+    这个项目**不允许**引用任何 UI 框架（WPF / WinUI / WinForms）。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>EchoLink.App</RootNamespace>
+    <AssemblyName>EchoLink.App.Shared</AssemblyName>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EchoLink.Core\EchoLink.Core.csproj" />
+  </ItemGroup>
+
+</Project>

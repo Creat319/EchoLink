@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>EchoLink.App.WinUI</RootNamespace>
+    <AssemblyName>EchoLink.App.WinUI</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <EnableMsixTooling>false</EnableMsixTooling>
+
+    <!-- 不打包（unpackaged）+ 自带 Windows App SDK，
+         用户不需要额外装 WinAppSDK 运行时；代价是产物大一些。 -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ViewModel / 配置 / 模型：与 WPF 版共用同一份 -->
+    <ProjectReference Include="..\EchoLink.App.Shared\EchoLink.App.Shared.csproj" />
+    <!-- 托盘图标（WinForms NotifyIcon）单独成库：
+         在本工程里直接开 UseWindowsForms 会拉进 WPF 标记编译，报 MC6000 -->
+    <ProjectReference Include="..\EchoLink.Tray\EchoLink.Tray.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

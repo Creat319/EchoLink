@@ -5,6 +5,85 @@
 
 ---
 
+## v0.6.0
+
+**新增 WinUI 3 客户端**：`EchoLink.App.WinUI`。WPF 版保留，两者共用同一套 ViewModel。
+
+### 为什么是"并存"而不是直接替换
+
+你要求"只改 UI，其它一个都不要少"。直接重写整个界面工程，等于把 3000 行界面逻辑
+一次性押上去赌它能跑通——上次 Flutter 那次已经证明这样做的代价。
+
+所以先做了一件事：**把与 UI 框架无关的部分抽成 `EchoLink.App.Shared`**
+（MainViewModel 1646 行、配置、模型、定时器、桥接口），WPF 与 WinUI 各提供一个瘦外壳。
+好处是"功能有没有丢"这件事变成可验证的——同一份逻辑跑在两个壳里，行为必然一致。
+
+抽取时拆掉的三处 WPF 耦合（外加两处顺手发现的）：
+
+| 原来 | 现在 |
+| --- | --- |
+| `System.Windows.Media.Brush` 属性 | 十六进制字符串 + 各 UI 自己的转换器 |
+| `MessageBox.Show` | `IUiBridge.ShowWarning` |
+| `Dispatcher` / `DispatcherTimer` | `IUiBridge.Post` + 共用 `UiTimer` |
+| `Microsoft.Win32.SaveFileDialog` | `IUiBridge.PickSaveFile`（WinUI 用 FileSavePicker） |
+| `DeviceItem.Accent`（Brush） | `AccentColor`（字符串） |
+
+### 工程结构
+
+```
+EchoLink.Core          音频引擎 / WASAPI / 传输（未改动）
+EchoLink.App.Shared    ViewModel、配置、模型、桥接口（新增）
+EchoLink.Tray          托盘图标（WinForms NotifyIcon，新增）
+EchoLink.App           WPF 外壳（保留，可回退）
+EchoLink.App.WinUI     WinUI 3 外壳（新增）
+```
+
+### 新界面
+
+- **左侧边栏导航**（主控 / 高级 / 日志），底部常驻版本、更新与退出
+- 顶部**主角区**：端到端延迟大字 + 水位 / 包每秒两个小统计 + 启动/停止
+- 卡片标题改中性色，强调色只留给"进行中"和主操作
+- 关窗收进托盘（`AppWindow.Closing` 拦截），应用内「退出」按钮
+- 主控 / 高级 / 日志 三页，绑定与原版一一对应
+
+### 踩过的坑（都记下来）
+
+1. **WinUI 3 在只有 .NET SDK 10 的机器上，Windows App SDK 1.7 无法生成 PRI**
+   （`Microsoft.Build.Packaging.Pri.Tasks.dll` 找不到，需要 VS 组件）。
+   换 **1.8.260921001 + BuildTools 10.0.26100.4654** 后干净构建通过。
+   顺带纠正我上一轮的错误结论：当时那次"构建成功"是增量缓存假象，干净重建同样失败。
+2. **`UseWindowsForms` 与 WinUI 同项目会触发 WPF 标记编译**（MC6000 找不到 PresentationCore）。
+   托盘拆成独立类库 `EchoLink.Tray` 后解决。
+3. **UserControl 引用窗口级资源会崩**：`Cannot find a Resource with the Name/Key MutedBrush`。
+   画刷与样式必须放 `App.xaml` 的 Application.Resources。
+4. `Assets/logo.png` 忘了 `Content` 打包，`ms-appx:///` 取不到，启动直接 0xC000027B。
+5. WinUI 的 `TextBox` 没有 `VerticalScrollBarVisibility`，要用 `ScrollViewer.` 附加属性。
+6. WinUI 没有 `DataTrigger`，"按状态换颜色"改用 `BoolToBrushConverter`。
+
+### 验证（本机实测）
+
+| 项 | 结果 |
+| --- | --- |
+| 干净构建（含 WPF 版） | ✅ 整个 `EchoLink.slnx` 构建通过 |
+| 启动 | ✅ 窗口正常，89 个可访问元素 |
+| 侧边栏导航 | ✅ 主控 / 高级 / 日志 可切换，切换时卡片互斥显隐正确 |
+| 端点枚举 | ✅ 下拉 7 项（系统默认 + 6 个端点），默认项选中 |
+| ViewModel 真在跑 | ✅ 日志显示 `探测完成：6 个端点`、麦克风自动配置 `CABLE Input → CABLE Output` |
+| 日志页 | ✅ 内容与时间戳正常滚动 |
+| 关窗收进托盘 | ✅ 窗口句柄归 0，进程存活 |
+
+### 产物与遗留
+
+- WinUI 版自包含发布 **137 MB**：Windows App SDK 1.8 自包含里带了
+  `onnxruntime.dll`(20.7 MB) + `DirectML.dll`(17.8 MB) 等 ML 运行时，我们用不到但没法简单剔除。
+- 试过"不打包 WinAppSDK"（**37.9 MB**），但本机启动报
+  `This application could not be started`——已安装的运行时版本对不上。
+  要瘦身就得做安装器 + 指定运行时版本，留作后续。
+- **WPF 版仍在**：`artifacts/pc/`。WinUI 在 `artifacts/pc-winui/`。
+- 没做：把 WPF 从默认产物里摘掉、WinUI 版的自定义标题栏与 Mica（Win10 22H2 没有 Mica）。
+
+---
+
 ## v0.5.2
 
 实机日志（66.8 s、55 ms 端到端）暴露的三个问题，都修了。只有安卓端有功能改动。

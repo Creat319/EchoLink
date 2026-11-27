@@ -30,7 +30,7 @@ public partial class MainWindow : Window
     /// </summary>
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!App.CloseToTray)
+        if (!ShellSettings.CloseToTray)
         {
             base.OnClosing(e);
             return;

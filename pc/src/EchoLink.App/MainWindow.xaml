@@ -8,9 +8,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:controls="clr-namespace:EchoLink.App.Controls"
-        xmlns:vm="clr-namespace:EchoLink.App.ViewModels"
+        xmlns:vm="clr-namespace:EchoLink.App.ViewModels;assembly=EchoLink.App.Shared"
         Title="EchoLink · PC 发送端"
-        Width="1180" Height="820" MinWidth="1080" MinHeight="640"
+        Width="1240" Height="840" MinWidth="1120" MinHeight="660"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource AppBackground}"
         FontFamily="{materialDesign:MaterialDesignFont}"
@@ -23,606 +23,634 @@
         <vm:MainViewModel />
     </Window.DataContext>
 
-    <Grid Margin="16" FocusManager.FocusedElement="{Binding ElementName=StartButton}">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <!-- 左侧边栏 + 右侧内容。侧边栏比顶部导航更适合这个应用：
+         它常驻可见、能放状态与版本，也不占垂直空间（垂直方向要留给指标和日志）。 -->
+    <Grid FocusManager.FocusedElement="{Binding ElementName=StartButton}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="236" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <!-- ============================================================ 顶栏 -->
-        <Border Grid.Row="0" Style="{StaticResource CardPanel}" Margin="0,0,0,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <!-- ============================================================ 侧边栏 -->
+        <Border Grid.Column="0"
+                Background="{StaticResource AppSidebar}"
+                BorderBrush="{StaticResource AppCardBorder}"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="16,20,16,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <Image Source="Assets/logo.png" Width="38" Height="38"
-                       VerticalAlignment="Center"
-                       RenderOptions.BitmapScalingMode="HighQuality" />
-
-                <StackPanel Grid.Column="1" Margin="14,0,16,0" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal">
+                <!-- 品牌 -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <Image Source="Assets/logo.png" Width="34" Height="34"
+                           VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="EchoLink" Style="{StaticResource AppTitle}" />
-                        <TextBlock Text="· PC 发送端" Style="{StaticResource AppSubtitle}"
-                                   Margin="8,0,0,2" VerticalAlignment="Bottom" />
-                        <TextBlock Text="{Binding AppVersionText}"
-                                   Margin="8,0,0,3"
-                                   VerticalAlignment="Bottom"
-                                   FontFamily="Cascadia Mono, Consolas"
-                                   FontSize="10.5"
-                                   Opacity="0.38" />
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
-                        <Border CornerRadius="9"
-                                BorderThickness="1"
-                                BorderBrush="{Binding LinkStateBrush}"
-                                Padding="9,1.5">
-                            <TextBlock Text="{Binding LinkStateText}"
-                                       Foreground="{Binding LinkStateBrush}"
-                                       FontSize="11.5" FontWeight="SemiBold" />
-                        </Border>
-                        <TextBlock Text="{Binding LinkDescription}"
-                                   Style="{StaticResource AppSubtitle}"
-                                   Margin="10,0,0,0" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="420" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="PC 发送端" Style="{StaticResource AppSubtitle}" />
+                            <TextBlock Text="{Binding AppVersionText}"
+                                       Margin="6,0,0,0"
+                                       FontFamily="Cascadia Mono, Consolas"
+                                       FontSize="10"
+                                       Opacity="0.35" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <StackPanel Margin="0,0,18,0" VerticalAlignment="Center">
-                        <TextBlock Text="包/秒" Style="{StaticResource AppSubtitle}" HorizontalAlignment="Right" />
-                        <TextBlock Text="{Binding PacketsPerSecondText}" Style="{StaticResource MonoValue}"
-                                   FontSize="17" HorizontalAlignment="Right" />
-                    </StackPanel>
+                <!-- 链路状态 -->
+                <StackPanel Grid.Row="1" Margin="0,18,0,0">
+                    <Border CornerRadius="7"
+                            BorderThickness="1"
+                            BorderBrush="{Binding LinkStateColor, Converter={StaticResource HexToBrush}}"
+                            Padding="9,2"
+                            HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding LinkStateText}"
+                                   Foreground="{Binding LinkStateColor, Converter={StaticResource HexToBrush}}"
+                                   FontSize="11.5" FontWeight="SemiBold" />
+                    </Border>
+                    <TextBlock Text="{Binding LinkDescription}"
+                               Style="{StaticResource AppSubtitle}"
+                               Margin="0,8,0,0"
+                               TextWrapping="Wrap"
+                               LineHeight="16" />
+                </StackPanel>
 
-                    <Button x:Name="StartButton" Content="启动" Command="{Binding StartCommand}"
-                            Width="96" Height="40" Margin="0,0,8,0" />
-                    <Button Content="停止" Command="{Binding StopCommand}"
-                            Width="96" Height="40" />
+                <!-- 导航 -->
+                <ListBox Grid.Row="2" Margin="0,22,0,0"
+                         VerticalAlignment="Top"
+                         Background="Transparent" BorderThickness="0"
+                         SelectedIndex="{Binding SelectedPageIndex}">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Height" Value="42" />
+                            <Setter Property="Margin" Value="0,0,0,4" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bg" CornerRadius="8" Background="Transparent">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="3" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border x:Name="Bar" Grid.Column="0"
+                                                        Width="3" CornerRadius="2"
+                                                        Margin="0,9"
+                                                        Background="Transparent" />
+                                                <ContentPresenter x:Name="Cp"
+                                                                  Grid.Column="1"
+                                                                  Margin="14,0,0,0"
+                                                                  VerticalAlignment="Center"
+                                                                  HorizontalAlignment="Left" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bg" Property="Background" Value="#0DFFFFFF" />
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bg" Property="Background" Value="#16212D" />
+                                                <Setter TargetName="Bar" Property="Background" Value="{StaticResource BrandCyan}" />
+                                                <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{StaticResource AppBody}" />
+                                                <Setter TargetName="Cp" Property="TextElement.FontWeight" Value="SemiBold" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBoxItem Content="主控" />
+                    <ListBoxItem Content="高级" />
+                    <ListBoxItem Content="日志" />
+                </ListBox>
+                    <StackPanel Grid.Row="3">
+                    <!-- 更新与退出：侧边栏底部常驻，不再和应用版本抢位置 -->
+                    <Button Content="{Binding UpdateStatusText}"
+                            Command="{Binding CheckUpdateCommand}"
+                            Background="Transparent" BorderThickness="0"
+                            Padding="0" Margin="0,0,0,6"
+                            HorizontalContentAlignment="Left"
+                            FontSize="11" Opacity="0.55"
+                            Visibility="{Binding HasNoUpdate, Converter={StaticResource BoolToVisibility}}" />
+                    <Button Content="{Binding UpdateLinkText}"
+                            Command="{Binding OpenDownloadCommand}"
+                            Background="Transparent" BorderThickness="0"
+                            Padding="0" Margin="0,0,0,6"
+                            HorizontalContentAlignment="Left"
+                            FontSize="11.5" FontWeight="SemiBold"
+                            Foreground="{StaticResource BrandGreen}"
+                            Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- 应用内退出：托盘图标在 Win10/11 默认被收进溢出区，不少人找不到 -->
+                    <Button Content="退出 EchoLink"
+                            Click="OnExitClicked"
+                            Background="Transparent" BorderThickness="0"
+                            Padding="0"
+                            HorizontalContentAlignment="Left"
+                            FontSize="11" Opacity="0.45"
+                            ToolTip="完全退出（点关闭只是收进托盘）" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ============================================================ 导航 -->
-        <Grid Grid.Row="1" Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <!-- ============================================================ 内容 -->
+        <Grid Grid.Column="1" Margin="22,20,22,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-        <ListBox Grid.Column="0" Margin="0,0,0,12"
-                 Background="Transparent" BorderThickness="0"
-                 HorizontalAlignment="Left"
-                 SelectedIndex="{Binding SelectedPageIndex}">
-            <ListBox.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-            </ListBox.ItemsPanel>
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="ListBoxItem">
-                    <Setter Property="Margin" Value="0,0,8,0" />
-                    <Setter Property="Padding" Value="20,8" />
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="ListBoxItem">
-                                <Border x:Name="Bg" CornerRadius="9" Background="Transparent"
-                                        Padding="{TemplateBinding Padding}">
-                                    <ContentPresenter x:Name="Cp"
-                                                      HorizontalAlignment="Center"
-                                                      VerticalAlignment="Center" />
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
-                                    </Trigger>
-                                    <Trigger Property="IsSelected" Value="True">
-                                        <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandGreen}" />
-                                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="White" />
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBoxItem Content="主控" />
-            <ListBoxItem Content="高级" />
-            <ListBoxItem Content="日志" />
-        </ListBox>
+            <!-- 主角区：端到端延迟是这个应用唯一真正重要的数字，
+                 之前它和"回调次数 12534"同一个字号，等于没有重点。 -->
+            <Border Grid.Row="0" Style="{StaticResource CardPanel}"
+                    Margin="0,0,0,14" Padding="20,16"
+                    Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-            <!-- 版本与更新提示：放导航行右侧，不再和状态文字挤在一起 -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="{Binding UpdateStatusText}"
-                        Command="{Binding CheckUpdateCommand}"
-                        Background="Transparent" BorderThickness="0" Padding="10,4"
-                        FontSize="11" Opacity="0.8"
-                        Visibility="{Binding HasNoUpdate, Converter={StaticResource BoolToVisibility}}" />
-                <Button Content="{Binding UpdateLinkText}"
-                        Command="{Binding OpenDownloadCommand}"
-                        Background="Transparent" BorderThickness="0" Padding="10,4"
-                        FontSize="11.5" FontWeight="SemiBold"
-                        Foreground="{StaticResource BrandGreen}"
-                        Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibility}}" />
-
-                <!-- 应用内退出：托盘的图标在 Win10/11 默认会被收进溢出区（那个 ^ 箭头里），
-                     有人找不到，所以这里留一个一定能点到的出口 -->
-                <Button Content="退出"
-                        Click="OnExitClicked"
-                        Background="Transparent" BorderThickness="0" Padding="10,4"
-                        FontSize="11" Opacity="0.7"
-                        ToolTip="完全退出 EchoLink（关窗口只是收进托盘）" />
-            </StackPanel>
-        </Grid>
-
-        <!-- ============================================================ 主体 -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0"
-                      Visibility="{Binding IsContentPage, Converter={StaticResource BoolToVisibility}}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="430" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <!-- 左列：配置 -->
-                <StackPanel Grid.Column="0" Margin="0,0,12,0">
-
-                    <!-- 输出设备 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="输出设备" Style="{StaticResource SectionTitle}" />
-
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <ComboBox ItemsSource="{Binding Devices}"
-                                          SelectedItem="{Binding SelectedDevice}"
-                                          DisplayMemberPath="Name"
-                                          Margin="0,0,8,0" />
-                                <Button Grid.Column="1" Content="刷新" Padding="14,3"
-                                        Command="{Binding RefreshDevicesCommand}" />
-                            </Grid>
-
-                            <controls:MetricRow Label="设备格式" Value="{Binding DeviceFormatText}" />
-                            <controls:MetricRow Label="抓取模式" Value="{Binding CaptureModeText}" />
-                            <controls:MetricRow Label="抓取粒度" Value="{Binding EnginePeriodText}" Hint="{Binding EnginePeriodHint}" />
-                            <controls:MetricRow Label="抓取缓冲" Value="{Binding BufferText}" />
-                            <controls:MetricRow Label="每回调帧数" Value="{Binding FramesPerCallbackText}" />
-                            <controls:MetricRow Label="保活流" Value="{Binding KeepAliveModeText}" />
-
-                            <!-- 端点周期探测：换端点最多能省 17 ms，但不自动切换（快速端点往往不是正在出声的设备） -->
-                            <TextBlock Text="{Binding FastEndpointHint}"
-                                       TextWrapping="Wrap"
-                                       FontSize="11"
-                                       Margin="0,6,0,0"
-                                       Opacity="0.75"
-                                       Foreground="{StaticResource BrandGreen}"
-                                       Visibility="{Binding HasFastEndpointHint, Converter={StaticResource BoolToVisibility}}" />
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 手机音量 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="手机音量" Style="{StaticResource SectionTitle}" />
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Slider Minimum="0" Maximum="100"
-                                        TickFrequency="1"
-                                        IsSnapToTickEnabled="True"
-                                        SmallChange="1"
-                                        LargeChange="10"
-                                        VerticalAlignment="Center"
-                                        IsEnabled="{Binding IsVolumeControlSupported}"
-                                        Value="{Binding PhoneVolumePercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding PhoneVolumeText}"
-                                           FontSize="13"
-                                           MinWidth="46"
-                                           TextAlignment="Right"
-                                           VerticalAlignment="Center"
-                                           Margin="10,0,0,0" />
-                            </Grid>
-
-                            <TextBlock Text="{Binding VolumeHintText}"
-                                       TextWrapping="Wrap"
-                                       FontSize="11"
-                                       Opacity="0.75"
-                                       Margin="0,6,0,0">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasVolumeWarning}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource BrandAmber}" />
-                                                <Setter Property="Opacity" Value="1" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 引擎选项 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="引擎选项" Style="{StaticResource SectionTitle}" />
-
-                            <ComboBox SelectedIndex="{Binding ModeIndex}" Margin="0,0,0,10">
-                                <ComboBoxItem Content="自动（先试路径 A，失败回退）" />
-                                <ComboBoxItem Content="路径 A：IAudioClient3 环回小周期" />
-                                <ComboBoxItem Content="仅兜底：普通 IAudioClient" />
-                            </ComboBox>
-
-                            <CheckBox Content="保活流请求最小周期（路径 B）"
-                                      IsChecked="{Binding PreferSmallPeriod}"
-                                      Margin="0,0,0,8" />
-                            <CheckBox Content="启用保活流（静音时也持续产数据）"
-                                      IsChecked="{Binding EnableKeepAlive}" />
-
-                            <Separator Margin="0,10,0,10" Opacity="0.25" />
-
-                            <CheckBox Content="关闭窗口时最小化到系统托盘"
-                                      IsChecked="{Binding CloseToTray}"
-                                      Margin="0,0,0,4" />
-                            <TextBlock Text="关掉这个，点关闭就是直接退出。开着的时候要真正退出，请右键托盘图标选「退出 EchoLink」。"
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="端到端延迟（估算）" Style="{StaticResource AppSubtitle}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <TextBlock Text="{Binding EndToEndText}"
+                                       Style="{StaticResource HeroValue}" />
+                            <TextBlock Text="{Binding EndToEndBreakdown}"
                                        Style="{StaticResource AppSubtitle}"
-                                       TextWrapping="Wrap" />
+                                       VerticalAlignment="Bottom"
+                                       Margin="12,0,0,5" />
+                        </StackPanel>
+                        <TextBlock Text="尚未收到手机回报 —— 请确认手机端已点「开始接收」"
+                                   Style="{StaticResource AppSubtitle}"
+                                   Margin="0,2,0,0"
+                                   Visibility="{Binding HasPhoneReport, Converter={StaticResource InverseBoolToVisibility}}" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Style="{StaticResource HeroStat}">
+                        <StackPanel>
+                            <TextBlock Text="水位" Style="{StaticResource AppSubtitle}" />
+                            <TextBlock Text="{Binding PhoneWaterText}" Style="{StaticResource MonoValue}"
+                                       FontSize="18" Margin="0,1,0,0" />
                         </StackPanel>
                     </Border>
 
-                    <!-- 上行麦克风：把手机麦克风渲染到本机虚拟声卡 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
+                    <Border Grid.Column="2" Style="{StaticResource HeroStat}">
                         <StackPanel>
-                            <TextBlock Text="上行麦克风" Style="{StaticResource SectionTitle}" />
-
-                            <TextBlock Text="把手机当本机麦克风用。手机端会走语音链路并开平台回声消除，所以扬声器在放音乐时你也能随时插话。"
-                                       Style="{StaticResource AppSubtitle}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,8" />
-
-                            <CheckBox Content="启用（自动配置虚拟麦克风）"
-                                      IsChecked="{Binding EnableMic}"
-                                      Margin="0,0,0,6" />
-
-                            <TextBlock Text="{Binding MicRoutingText}"
-                                       Style="{StaticResource AppSubtitle}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,6" />
-
-                            <StackPanel Visibility="{Binding HasNoVirtualMic, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Text="虚拟麦克风必须是内核驱动，Windows 不允许应用在运行时创建，所以需要先装一个虚拟声卡。装完重启一次即可。"
-                                           Style="{StaticResource AppSubtitle}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <Button Content="安装虚拟声卡"
-                                            Command="{Binding InstallVirtualAudioCommand}"
-                                            Margin="0,0,8,0" />
-                                    <Button Content="重新扫描"
-                                            Command="{Binding RescanMicCommand}" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <ComboBox ItemsSource="{Binding Devices}"
-                                      SelectedItem="{Binding SelectedMicDevice}"
-                                      DisplayMemberPath="DisplayName"
-                                      Margin="0,0,0,6"
-                                      materialDesign:HintAssist.Hint="高级：手动指定渲染端点（默认已自动选好虚拟声卡）" />
-
-                            <controls:MetricRow Label="上行状态" Value="{Binding MicStatusText}" />
-                            <controls:MetricRow Label="上行水位 / 包数" Value="{Binding MicWaterText}" />
-
-                            <TextBlock Text="{Binding MicPhoneHintText}"
-                                       TextWrapping="Wrap"
-                                       Foreground="{StaticResource BrandGreen}"
-                                       FontSize="11"
-                                       Margin="0,4,0,0" />
+                            <TextBlock Text="包 / 秒" Style="{StaticResource AppSubtitle}" />
+                            <TextBlock Text="{Binding PacketsPerSecondText}" Style="{StaticResource MonoValue}"
+                                       FontSize="18" Margin="0,1,0,0" />
                         </StackPanel>
                     </Border>
 
-                    <!-- 手机地址 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="手机地址" Style="{StaticResource SectionTitle}" />
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                        <Button x:Name="StartButton" Content="启动" Command="{Binding StartCommand}"
+                                Width="92" Height="40" Margin="0,0,8,0" />
+                        <Button Content="停止" Command="{Binding StopCommand}"
+                                Width="92" Height="40" />
+                    </StackPanel>
+                </Grid>
+            </Border>
 
-                            <RadioButton Content="自动发现（USB 网络共享 / 同一局域网）"
-                                         GroupName="targetMode"
-                                         IsChecked="{Binding AutoDiscover}"
-                                         Margin="0,0,0,6" />
-                            <RadioButton Content="手动指定 IP"
-                                         GroupName="targetMode"
-                                         IsChecked="{Binding ManualMode}"
-                                         Margin="0,0,0,8" />
+            <!-- 主体：两列配置 + 状态 -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0"
+                          Visibility="{Binding IsContentPage, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="420" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-                            <TextBox Text="{Binding ManualTarget, UpdateSourceTrigger=PropertyChanged}"
-                                     materialDesign:HintAssist.Hint="手机 IP，例如 192.168.96.150 或 192.168.1.37"
-                                     IsEnabled="{Binding ManualMode}"
-                                     Margin="0,0,0,8" />
+                    <!-- 左列：配置 -->
+                    <StackPanel Grid.Column="0" Margin="0,0,14,0">
 
-                            <!-- 无线（局域网）连接：不接数据线，手机和电脑连同一个 WiFi 路由器。
-                                 自动发现靠广播探测；万一被防火墙拦了，就点扫描拿到 IP 再手填。 -->
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Button Content="扫描局域网"
-                                        Command="{Binding ScanLanCommand}"
-                                        Padding="12,3" />
-                                <TextBlock Grid.Column="1"
-                                           Text="无线连接：手机和电脑连同一个 WiFi 即可，不用数据线"
-                                           Style="{StaticResource AppSubtitle}"
-                                           VerticalAlignment="Center"
-                                           Margin="10,0,0,0"
-                                           TextWrapping="Wrap" />
-                            </Grid>
+                        <!-- 输出设备 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="输出设备" Style="{StaticResource SectionTitle}" />
 
-                            <TextBlock Text="{Binding LanScanText}"
-                                       TextWrapping="Wrap"
-                                       FontSize="11"
-                                       Foreground="{StaticResource BrandGreen}"
-                                       Margin="0,0,0,8"
-                                       Visibility="{Binding HasLanScanResult, Converter={StaticResource BoolToVisibility}}" />
-
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="12" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="音频端口" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding AudioPort, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="回报端口" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding ReportPort, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
-                            </Grid>
-
-                            <!-- 候选地址是进阶信息：默认折叠，省下的高度让整屏不用滚动。
-                                 不用 Expander：MD 的默认标题栏是一块浅色块，深色卡片上很突兀。 -->
-                            <Button Content="▾   候选地址（按评分）"
-                                    Command="{Binding ToggleCandidatesCommand}"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Left"
-                                    Foreground="{StaticResource BrandCyan}"
-                                    Margin="0,6,0,0" />
-
-                            <StackPanel Margin="0,6,0,0"
-                                        Visibility="{Binding ShowCandidates, Converter={StaticResource BoolToVisibility}}">
-                                <Grid Margin="0,0,0,6">
-                                    <TextBlock Text="分数最高者优先探测" Style="{StaticResource FieldLabel}" />
-                                    <Button Content="重新扫描" Padding="12,2"
-                                            HorizontalAlignment="Right"
-                                            Command="{Binding RescanCandidatesCommand}" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox ItemsSource="{Binding Devices}"
+                                              SelectedItem="{Binding SelectedDevice}"
+                                              DisplayMemberPath="Name"
+                                              Margin="0,0,8,0" />
+                                    <Button Grid.Column="1" Content="刷新" Padding="14,3"
+                                            Command="{Binding RefreshDevicesCommand}" />
                                 </Grid>
 
-                                <Border Style="{StaticResource InsetPanel}" MaxHeight="96" Padding="10,7">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                        <TextBlock Text="{Binding CandidatesText}"
-                                                   FontFamily="Cascadia Mono, Consolas"
-                                                   FontSize="11"
-                                                   Opacity="0.78"
-                                                   TextWrapping="Wrap" />
-                                    </ScrollViewer>
-                                </Border>
+                                <controls:MetricRow Label="设备格式" Value="{Binding DeviceFormatText}" />
+                                <controls:MetricRow Label="抓取模式" Value="{Binding CaptureModeText}" />
+                                <controls:MetricRow Label="抓取粒度" Value="{Binding EnginePeriodText}" Hint="{Binding EnginePeriodHint}" />
+                                <controls:MetricRow Label="抓取缓冲" Value="{Binding BufferText}" />
+                                <controls:MetricRow Label="每回调帧数" Value="{Binding FramesPerCallbackText}" />
+                                <controls:MetricRow Label="保活流" Value="{Binding KeepAliveModeText}" />
+
+                                <!-- 端点周期探测：换端点最多能省 17 ms，但不自动切换 -->
+                                <TextBlock Text="{Binding FastEndpointHint}"
+                                           TextWrapping="Wrap"
+                                           FontSize="11"
+                                           Margin="0,8,0,0"
+                                           Opacity="0.8"
+                                           Foreground="{StaticResource BrandCyan}"
+                                           Visibility="{Binding HasFastEndpointHint, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                        </Border>
 
-                <!-- 右列：状态 -->
-                <StackPanel Grid.Column="1">
+                        <!-- 手机地址 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="手机地址" Style="{StaticResource SectionTitle}" />
 
-                    <!-- 实时状态 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="实时状态" Style="{StaticResource SectionTitle}" />
+                                <RadioButton Content="自动发现（USB 网络共享 / 同一局域网）"
+                                             GroupName="targetMode"
+                                             IsChecked="{Binding AutoDiscover}"
+                                             Margin="0,0,0,8" />
+                                <RadioButton Content="手动指定 IP"
+                                             GroupName="targetMode"
+                                             IsChecked="{Binding ManualMode}"
+                                             Margin="0,0,0,10" />
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="24" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding ManualTarget, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="手机 IP，例如 192.168.96.150 或 192.168.1.37"
+                                         IsEnabled="{Binding ManualMode}"
+                                         Margin="0,0,0,10" />
 
-                                <StackPanel Grid.Column="0">
-                                    <controls:MetricRow Label="目标" Value="{Binding TargetText}" />
-                                    <controls:MetricRow Label="已发送包" Value="{Binding PacketsSentText}" />
-                                    <controls:MetricRow Label="抓取时长" Value="{Binding CapturedText}" />
-                                    <controls:MetricRow Label="静音回调" Value="{Binding SilentCallbacksText}" />
-                                    <controls:MetricRow Label="时序不连续" Value="{Binding DiscontinuitiesText}" />
-                                    <controls:MetricRow Label="发送错误" Value="{Binding SendErrorsText}" />
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
-                                    <controls:MetricRow Label="PC 抓取" Value="{Binding CaptureDelayText}" Hint="半个抓取周期" />
-                                    <controls:MetricRow Label="峰值电平" Value="{Binding PeakText}" />
-                                    <controls:MetricRow Label="RMS" Value="{Binding RmsText}" />
-                                    <controls:MetricRow Label="手机回报距今" Value="{Binding PhoneAgeText}" />
-                                </StackPanel>
-                            </Grid>
-
-                            <Border Style="{StaticResource InsetPanel}" Margin="0,10,0,0" Padding="12,10">
-                                <StackPanel>
-                                    <TextBlock Text="输出电平（峰值）" Style="{StaticResource FieldLabel}" />
-                                    <controls:LevelMeter Value="{Binding PeakLevel, Mode=OneWay}"
-                                                         Fill="{StaticResource BrandCyan}"
-                                                         Margin="0,7,0,0" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 手机回报 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="手机回报" Style="{StaticResource SectionTitle}" />
-
-                            <Grid Visibility="{Binding HasPhoneReport, Converter={StaticResource BoolToVisibility}}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="24" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <controls:MetricRow Label="当前水位" Value="{Binding PhoneWaterText}" />
-                                    <controls:MetricRow Label="目标水位" Value="{Binding PhoneTargetText}" />
-                                    <controls:MetricRow Label="抖动 P99" Value="{Binding PhoneJitterText}" />
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
-                                    <controls:MetricRow Label="欠载次数" Value="{Binding PhoneUnderrunsText}" />
-                                    <controls:MetricRow Label="丢包" Value="{Binding PhoneLostText}" />
-                                    <controls:MetricRow Label="输出延迟" Value="{Binding PhoneLatencyText}" />
-                                </StackPanel>
-                            </Grid>
-
-                            <!-- 端到端：把三段加起来的估算值，放在最显眼的位置 -->
-                            <Border Style="{StaticResource InsetPanel}"
-                                    Margin="0,8,0,0"
-                                    Padding="12,8"
-                                    Visibility="{Binding HasPhoneReport, Converter={StaticResource BoolToVisibility}}">
-                                <Grid>
+                                <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
+                                    <Button Content="扫描局域网"
+                                            Command="{Binding ScanLanCommand}"
+                                            Padding="12,3" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="无线：手机和电脑连同一个 WiFi 即可"
+                                               Style="{StaticResource AppSubtitle}"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"
+                                               TextWrapping="Wrap" />
+                                </Grid>
 
-                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="端到端（估）" FontSize="12.5" Opacity="0.72" />
-                                        <TextBlock Text="平均" Margin="6,0,0,0" FontSize="10.5" Opacity="0.42"
-                                                   VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding LanScanText}"
+                                           TextWrapping="Wrap"
+                                           FontSize="11"
+                                           Foreground="{StaticResource BrandGreen}"
+                                           Margin="0,0,0,10"
+                                           Visibility="{Binding HasLanScanResult, Converter={StaticResource BoolToVisibility}}" />
+
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="音频端口" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding AudioPort, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                                        <TextBlock Text="{Binding EndToEndText}"
-                                                   Foreground="{StaticResource BrandGreen}"
-                                                   FontFamily="Cascadia Mono, Consolas"
-                                                   FontSize="16"
-                                                   FontWeight="SemiBold"
-                                                   HorizontalAlignment="Right" />
-                                        <TextBlock Text="{Binding EndToEndBreakdown}"
-                                                   FontSize="10.5"
-                                                   Opacity="0.42"
-                                                   HorizontalAlignment="Right" />
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="回报端口" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding ReportPort, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
-                            </Border>
 
-                            <TextBlock Text="尚未收到手机回报 —— 请确认手机端已点「开始接收」，或地址/端口是否正确。"
-                                       Style="{StaticResource AppSubtitle}"
-                                       TextWrapping="Wrap"
-                                       Visibility="{Binding HasPhoneReport, Converter={StaticResource InverseBoolToVisibility}}" />
-                        </StackPanel>
-                    </Border>
+                                <!-- 候选地址是进阶信息：默认折叠 -->
+                                <Button Content="▾   候选地址（按评分）"
+                                        Command="{Binding ToggleCandidatesCommand}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0"
+                                        HorizontalContentAlignment="Left"
+                                        Foreground="{StaticResource BrandCyan}"
+                                        Margin="0,4,0,0" />
 
-                    <!-- 诊断 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="诊断" Style="{StaticResource SectionTitle}" />
+                                <StackPanel Margin="0,6,0,0"
+                                            Visibility="{Binding ShowCandidates, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid Margin="0,0,0,6">
+                                        <TextBlock Text="分数最高者优先探测" Style="{StaticResource FieldLabel}" />
+                                        <Button Content="重新扫描" Padding="12,2"
+                                                HorizontalAlignment="Right"
+                                                Command="{Binding RescanCandidatesCommand}" />
+                                    </Grid>
 
-                            <CheckBox Content="写诊断 WAV（48 kHz / 16 bit / 立体声）"
-                                      IsChecked="{Binding WavDumpEnabled}"
-                                      Margin="0,0,0,8" />
+                                    <Border Style="{StaticResource InsetPanel}" MaxHeight="96" Padding="10,7">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <TextBlock Text="{Binding CandidatesText}"
+                                                       FontFamily="Cascadia Mono, Consolas"
+                                                       FontSize="11"
+                                                       Opacity="0.78"
+                                                       TextWrapping="Wrap" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox Text="{Binding WavDumpPath}" IsReadOnly="True"
-                                         materialDesign:HintAssist.Hint="尚未选择保存位置"
-                                         Margin="0,0,8,0" />
-                                <Button Grid.Column="1" Content="选择…" Padding="14,3"
-                                        Command="{Binding BrowseWavCommand}" />
-                            </Grid>
+                        <!-- 手机音量 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="手机音量" Style="{StaticResource SectionTitle}" />
 
-                            <WrapPanel>
-                                <Button Content="播放测试音" Command="{Binding TestToneCommand}"
-                                        Margin="0,0,8,0" Padding="14,4" />
-                                <Button Content="点击声串（10 次）" Command="{Binding ClickTrainCommand}"
-                                        Padding="14,4" />
-                                <Button Content="清空日志" Click="OnClearLogClicked"
-                                        Margin="8,0,0,0" Padding="14,4" />
-                            </WrapPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Minimum="0" Maximum="100"
+                                            TickFrequency="1"
+                                            IsSnapToTickEnabled="True"
+                                            SmallChange="1"
+                                            LargeChange="10"
+                                            VerticalAlignment="Center"
+                                            IsEnabled="{Binding IsVolumeControlSupported}"
+                                            Value="{Binding PhoneVolumePercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding PhoneVolumeText}"
+                                               Style="{StaticResource MonoValue}"
+                                               MinWidth="46"
+                                               TextAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0" />
+                                </Grid>
 
-                            <controls:MetricRow Label="WAV 状态" Value="{Binding WavDumpStatusText}" Margin="0,8,0,0" />
-                        </StackPanel>
-                    </Border>
+                                <TextBlock Text="{Binding VolumeHintText}"
+                                           TextWrapping="Wrap"
+                                           FontSize="11"
+                                           Opacity="0.7"
+                                           Margin="0,8,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasVolumeWarning}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource BrandAmber}" />
+                                                    <Setter Property="Opacity" Value="1" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
 
-                    <!-- 提示 -->
-                    <Border Style="{StaticResource CardPanel}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="使用提示" Style="{StaticResource SectionTitle}" />
-                            <TextBlock Style="{StaticResource AppSubtitle}" TextWrapping="Wrap" LineHeight="19">
-                                想让本机喇叭不出声：把 Windows 默认输出设为虚拟声卡（如 VB-Cable），
-                                这里再选同一张声卡抓环回。不要用系统静音——不同设备静音后环回行为不一致。
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource AppSubtitle}" TextWrapping="Wrap" LineHeight="19" Margin="0,8,0,0">
-                                首次连通请配合手机端弹出的「听到了吗？」确认——这是发现声音被静默重路由到蓝牙的唯一手段。
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </Grid>
-        </ScrollViewer>
+                        <!-- 引擎选项 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="引擎选项" Style="{StaticResource SectionTitle}" />
 
-        <!-- ============================================================ 日志 -->
-        <Border Grid.Row="2" Style="{StaticResource CardPanelTight}"
-                Visibility="{Binding IsLogPage, Converter={StaticResource BoolToVisibility}}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+                                <ComboBox SelectedIndex="{Binding ModeIndex}" Margin="0,0,0,12">
+                                    <ComboBoxItem Content="自动（先试路径 A，失败回退）" />
+                                    <ComboBoxItem Content="路径 A：IAudioClient3 环回小周期" />
+                                    <ComboBoxItem Content="仅兜底：普通 IAudioClient" />
+                                </ComboBox>
 
-                <Grid Grid.Row="0" Margin="0,0,0,6">
-                    <TextBlock Text="日志" Style="{StaticResource SectionTitle}" Margin="0" />
-                    <TextBlock Text="最多保留 500 行" Style="{StaticResource AppSubtitle}"
-                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <CheckBox Content="保活流请求最小周期（路径 B）"
+                                          IsChecked="{Binding PreferSmallPeriod}"
+                                          Margin="0,0,0,8" />
+                                <CheckBox Content="启用保活流（静音时也持续产数据）"
+                                          IsChecked="{Binding EnableKeepAlive}" />
+
+                                <Separator Margin="0,12,0,12" Opacity="0.2" />
+
+                                <CheckBox Content="关闭窗口时最小化到系统托盘"
+                                          IsChecked="{Binding CloseToTray}"
+                                          Margin="0,0,0,4" />
+                                <TextBlock Text="关掉这个，点关闭就是直接退出。开着的时候要真正退出，请用左下角的「退出 EchoLink」。"
+                                           Style="{StaticResource AppSubtitle}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 上行麦克风 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="上行麦克风" Style="{StaticResource SectionTitle}" />
+
+                                <TextBlock Text="把手机当本机麦克风用。手机端会走语音链路并开平台回声消除，所以扬声器在放音乐时你也能随时插话。"
+                                           Style="{StaticResource AppSubtitle}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,10" />
+
+                                <CheckBox Content="启用（自动配置虚拟麦克风）"
+                                          IsChecked="{Binding EnableMic}"
+                                          Margin="0,0,0,8" />
+
+                                <TextBlock Text="{Binding MicRoutingText}"
+                                           Style="{StaticResource AppSubtitle}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8" />
+
+                                <StackPanel Visibility="{Binding HasNoVirtualMic, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="虚拟麦克风必须是内核驱动，Windows 不允许应用在运行时创建，所以需要先装一个虚拟声卡。装完重启一次即可。"
+                                               Style="{StaticResource AppSubtitle}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,8" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <Button Content="安装虚拟声卡"
+                                                Command="{Binding InstallVirtualAudioCommand}"
+                                                Margin="0,0,8,0" />
+                                        <Button Content="重新扫描"
+                                                Command="{Binding RescanMicCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <ComboBox ItemsSource="{Binding Devices}"
+                                          SelectedItem="{Binding SelectedMicDevice}"
+                                          DisplayMemberPath="DisplayName"
+                                          Margin="0,0,0,8"
+                                          materialDesign:HintAssist.Hint="高级：手动指定渲染端点（默认已自动选好虚拟声卡）" />
+
+                                <controls:MetricRow Label="上行状态" Value="{Binding MicStatusText}" />
+                                <controls:MetricRow Label="上行水位 / 包数" Value="{Binding MicWaterText}" />
+
+                                <TextBlock Text="{Binding MicPhoneHintText}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource BrandCyan}"
+                                           FontSize="11"
+                                           Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- 右列：状态 -->
+                    <StackPanel Grid.Column="1">
+
+                        <!-- 手机回报 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="手机回报" Style="{StaticResource SectionTitle}" />
+
+                                <Grid Visibility="{Binding HasPhoneReport, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="24" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <controls:MetricRow Label="当前水位" Value="{Binding PhoneWaterText}" />
+                                        <controls:MetricRow Label="目标水位" Value="{Binding PhoneTargetText}" />
+                                        <controls:MetricRow Label="抖动 P99" Value="{Binding PhoneJitterText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <controls:MetricRow Label="欠载次数" Value="{Binding PhoneUnderrunsText}" />
+                                        <controls:MetricRow Label="丢包" Value="{Binding PhoneLostText}" />
+                                        <controls:MetricRow Label="输出延迟" Value="{Binding PhoneLatencyText}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="尚未收到手机回报 —— 请确认手机端已点「开始接收」，或地址/端口是否正确。"
+                                           Style="{StaticResource AppSubtitle}"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding HasPhoneReport, Converter={StaticResource InverseBoolToVisibility}}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 实时状态 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="实时状态" Style="{StaticResource SectionTitle}" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="24" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <controls:MetricRow Label="目标" Value="{Binding TargetText}" />
+                                        <controls:MetricRow Label="已发送包" Value="{Binding PacketsSentText}" />
+                                        <controls:MetricRow Label="抓取时长" Value="{Binding CapturedText}" />
+                                        <controls:MetricRow Label="静音回调" Value="{Binding SilentCallbacksText}" />
+                                        <controls:MetricRow Label="时序不连续" Value="{Binding DiscontinuitiesText}" />
+                                        <controls:MetricRow Label="发送错误" Value="{Binding SendErrorsText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <controls:MetricRow Label="PC 抓取" Value="{Binding CaptureDelayText}" Hint="半个抓取周期" />
+                                        <controls:MetricRow Label="峰值电平" Value="{Binding PeakText}" />
+                                        <controls:MetricRow Label="RMS" Value="{Binding RmsText}" />
+                                        <controls:MetricRow Label="手机回报距今" Value="{Binding PhoneAgeText}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border Style="{StaticResource InsetPanel}" Margin="0,12,0,0" Padding="12,10">
+                                    <StackPanel>
+                                        <TextBlock Text="输出电平（峰值）" Style="{StaticResource FieldLabel}" />
+                                        <controls:LevelMeter Value="{Binding PeakLevel, Mode=OneWay}"
+                                                             Fill="{StaticResource BrandCyan}"
+                                                             Margin="0,7,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 诊断 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsAdvancedPage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="诊断" Style="{StaticResource SectionTitle}" />
+
+                                <CheckBox Content="写诊断 WAV（48 kHz / 16 bit / 立体声）"
+                                          IsChecked="{Binding WavDumpEnabled}"
+                                          Margin="0,0,0,10" />
+
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding WavDumpPath}" IsReadOnly="True"
+                                             materialDesign:HintAssist.Hint="尚未选择保存位置"
+                                             Margin="0,0,8,0" />
+                                    <Button Grid.Column="1" Content="选择…" Padding="14,3"
+                                            Command="{Binding BrowseWavCommand}" />
+                                </Grid>
+
+                                <WrapPanel>
+                                    <Button Content="播放测试音" Command="{Binding TestToneCommand}"
+                                            Margin="0,0,8,0" Padding="14,4" />
+                                    <Button Content="点击声串（10 次）" Command="{Binding ClickTrainCommand}"
+                                            Padding="14,4" />
+                                    <Button Content="清空日志" Click="OnClearLogClicked"
+                                            Margin="8,0,0,0" Padding="14,4" />
+                                </WrapPanel>
+
+                                <controls:MetricRow Label="WAV 状态" Value="{Binding WavDumpStatusText}" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 使用提示：降级到最底部，不再和实时数据抢注意力 -->
+                        <Border Style="{StaticResource CardPanel}"
+                                Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="使用提示" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Style="{StaticResource AppSubtitle}" TextWrapping="Wrap" LineHeight="18">
+                                    想让本机喇叭不出声：把 Windows 默认输出设为虚拟声卡（如 VB-Cable），
+                                    这里再选同一张声卡抓环回。不要用系统静音——不同设备静音后环回行为不一致。
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource AppSubtitle}" TextWrapping="Wrap" LineHeight="18" Margin="0,8,0,0">
+                                    首次连通请配合手机端弹出的「听到了吗？」确认——这是发现声音被静默重路由到蓝牙的唯一手段。
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
                 </Grid>
+            </ScrollViewer>
 
-                <TextBox x:Name="LogBox"
-                         Grid.Row="1"
-                         Text="{Binding LogText, Mode=OneWay}"
-                         IsReadOnly="True"
-                         AcceptsReturn="True"
-                         TextWrapping="NoWrap"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Auto"
-                         FontFamily="Cascadia Mono, Consolas"
-                         FontSize="11.5"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Padding="0" />
-            </Grid>
-        </Border>
+            <!-- 日志 -->
+            <Border Grid.Row="1" Style="{StaticResource CardPanel}"
+                    Visibility="{Binding IsLogPage, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock Text="日志" Style="{StaticResource SectionTitle}" Margin="0" />
+                        <TextBlock Text="最多保留 500 行" Style="{StaticResource AppSubtitle}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <TextBox x:Name="LogBox"
+                             Grid.Row="1"
+                             Text="{Binding LogText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             FontFamily="Cascadia Mono, Consolas"
+                             FontSize="11.5"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0" />
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

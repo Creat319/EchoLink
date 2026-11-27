@@ -1,5 +1,3 @@
-using System.Windows.Media;
-
 namespace EchoLink.App.Models;
 
 /// <summary>渲染端点下拉项。<see cref="Id"/> 为 null 表示“跟随系统默认输出”。</summary>
@@ -34,7 +32,8 @@ public sealed class DeviceItem
     /// <summary>该端点能否给出比传统 10 ms 更小的抓取粒度。</summary>
     public bool SupportsSmallPeriod => MinPeriodMs > 0 && MinPeriodMs < 9.9;
 
-    public Brush Accent => IsDefault ? Brushes.LimeGreen : Brushes.Transparent;
+    /// <summary>强调色（十六进制字符串，由各 UI 项目转成自己的画刷）。</summary>
+    public string AccentColor => IsDefault ? "#32CD32" : "Transparent";
 
     /// <summary>下拉里直接标出小周期能力，用户才知道该选哪个端点。</summary>
     public string DisplayName

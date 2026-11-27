@@ -2,9 +2,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Threading;
 using EchoLink.Core;
 using EchoLink.Core.Audio;
 using EchoLink.Core.Engine;
@@ -26,16 +23,15 @@ namespace EchoLink.App.ViewModels;
 /// </summary>
 public sealed class MainViewModel : ObservableObject, IDisposable
 {
-    private static readonly Brush ConnectedBrush = Frozen(0x7E, 0xE2, 0xB8);
-    private static readonly Brush PendingBrush = Frozen(0xFF, 0xC4, 0x6B);
-    private static readonly Brush ErrorBrush = Frozen(0xFF, 0x7A, 0x7A);
-    private static readonly Brush NeutralBrush = Frozen(0xA8, 0xB6, 0xC6);
-    private static readonly Brush ValueBrush = Frozen(0xE4, 0xEB, 0xF2);
+    private const string ConnectedColor = "#7EE2B8";
+    private const string PendingColor = "#FFC46B";
+    private const string ErrorColor = "#FF7A7A";
+    private const string NeutralColor = "#A8B6C6";
+    private const string ValueColor = "#E4EBF2";
 
     private const int MaxLogLines = 500;
 
-    private readonly Dispatcher _dispatcher;
-    private readonly DispatcherTimer _timer;
+    private readonly UiTimer _timer;
     private readonly AppSettings _settings;
     private readonly object _logLock = new();
     private readonly Queue<string> _pendingLog = new();
@@ -73,13 +69,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _micRoutingText = string.Empty;
     private string _micPhoneHintText = string.Empty;
     private DateTime? _micZeroSince;
-    private DispatcherTimer? _micRescanTimer;
+    private UiTimer? _micRescanTimer;
     private int _micRescanCount;
 
     // ---------------- 运行时状态 ----------------
     private bool _isRunning;
     private string _linkStateText = "未启动";
-    private Brush _linkStateBrush = NeutralBrush;
+    private string _linkStateColor = NeutralColor;
     private string _linkDescription = "选择输出设备后点「启动」";
     private string _targetText = "-";
     private string _deviceFormatText = "-";
@@ -116,7 +112,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public MainViewModel()
     {
-        _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _settings = AppSettings.Load();
 
         Devices = new ObservableCollection<DeviceItem>();
@@ -153,8 +148,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             HasVirtualMic = VirtualMicLocator.LocateBest() is { Usable: true };
         }
 
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
-        _timer.Tick += (_, _) => RefreshSnapshot();
+        _timer = new UiTimer(TimeSpan.FromMilliseconds(250), RefreshSnapshot);
         _timer.Start();
 
         // 启动后静默查一次版本；失败不打扰（离线是常态）
@@ -226,29 +220,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _micRescanCount = 0;
-        _micRescanTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromSeconds(3),
-        };
-
-        _micRescanTimer.Tick += (_, _) =>
-        {
-            _micRescanCount++;
-            if (!_enableMic || _micRescanCount > 20)
-            {
-                StopMicRescan();
-                return;
-            }
-
-            var best = VirtualMicLocator.LocateBest();
-            if (best is { Usable: true })
-            {
-                AppendLog("[麦克风] 检测到新装的虚拟声卡，自动配置");
-                ConfigureMic();
-            }
-        };
-
+        _micRescanTimer = new UiTimer(TimeSpan.FromSeconds(3), MicRescanTick);
         _micRescanTimer.Start();
+    }
+
+    /// <summary>重扫一次虚拟声卡（装完驱动后自动识别，最多 20 次）。</summary>
+    private void MicRescanTick()
+    {
+        _micRescanCount++;
+        if (!_enableMic || _micRescanCount > 20)
+        {
+            StopMicRescan();
+            return;
+        }
+
+        var best = VirtualMicLocator.LocateBest();
+        if (best is { Usable: true })
+        {
+            AppendLog("[麦克风] 检测到新装的虚拟声卡，自动配置");
+            ConfigureMic();
+        }
     }
 
     private void StopMicRescan()
@@ -698,7 +689,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (Set(ref _closeToTray, value))
             {
-                App.CloseToTray = value;
+                ShellSettings.CloseToTray = value;
             }
         }
     }
@@ -746,7 +737,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 found = Array.Empty<DiscoveredPhone>();
-                _dispatcher.Invoke(() =>
+                UiBridge.Current.Post(() =>
                 {
                     _lanScanning = false;
                     LanScanText = "扫描失败：" + ex.Message;
@@ -754,7 +745,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            _dispatcher.Invoke(() =>
+            UiBridge.Current.Post(() =>
             {
                 _lanScanning = false;
 
@@ -889,10 +880,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _linkStateText, value);
     }
 
-    public Brush LinkStateBrush
+    public string LinkStateColor
     {
-        get => _linkStateBrush;
-        private set => Set(ref _linkStateBrush, value);
+        get => _linkStateColor;
+        private set => Set(ref _linkStateColor, value);
     }
 
     public string LinkDescription
@@ -1142,11 +1133,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             engine.Dispose();
 
             AppendLog("启动失败：" + ex.Message);
-            MessageBox.Show(
-                "启动失败：\n\n" + ex.Message,
-                "EchoLink",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            UiBridge.Current.ShowWarning("EchoLink", "启动失败：\n\n" + ex.Message);
             return;
         }
 
@@ -1154,7 +1141,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IsRunning = true;
         OnPropertyChanged(nameof(IsIdle));
         LinkStateText = "启动中";
-        LinkStateBrush = PendingBrush;
+        LinkStateColor = PendingColor;
 
         WavDumpStatusText = !string.IsNullOrWhiteSpace(options.WavDumpPath) ? "写入中" : "未写入";
         SaveSettings();
@@ -1184,7 +1171,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IsRunning = false;
         OnPropertyChanged(nameof(IsIdle));
         LinkStateText = "已停止";
-        LinkStateBrush = NeutralBrush;
+        LinkStateColor = NeutralColor;
         LinkDescription = "已停止";
         ResetRuntimeMetrics();
         SaveSettings();
@@ -1367,17 +1354,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void BrowseWav()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "选择诊断 WAV 保存位置",
-            Filter = "WAV 音频 (*.wav)|*.wav|所有文件 (*.*)|*.*",
-            FileName = $"echolink-{DateTime.Now:yyyyMMdd-HHmmss}.wav",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-        };
+        var path = UiBridge.Current.PickSaveFile(
+            "选择诊断 WAV 保存位置",
+            "WAV 音频 (*.wav)|*.wav|所有文件 (*.*)|*.*",
+            $"echolink-{DateTime.Now:yyyyMMdd-HHmmss}.wav");
 
-        if (dialog.ShowDialog() == true)
+        if (!string.IsNullOrEmpty(path))
         {
-            WavDumpPath = dialog.FileName;
+            WavDumpPath = path;
             WavDumpEnabled = true;
         }
     }
@@ -1443,12 +1427,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ => "未启动",
         };
 
-        LinkStateBrush = snapshot.LinkState switch
+        LinkStateColor = snapshot.LinkState switch
         {
-            EchoLinkLinkState.Connected => ConnectedBrush,
-            EchoLinkLinkState.Probing or EchoLinkLinkState.StreamingAwaitingReport => PendingBrush,
-            EchoLinkLinkState.Faulted => ErrorBrush,
-            _ => NeutralBrush,
+            EchoLinkLinkState.Connected => ConnectedColor,
+            EchoLinkLinkState.Probing or EchoLinkLinkState.StreamingAwaitingReport => PendingColor,
+            EchoLinkLinkState.Faulted => ErrorColor,
+            _ => NeutralColor,
         };
 
         LinkDescription = snapshot.LastError is { Length: > 0 } error
@@ -1591,7 +1575,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         // 合并刷屏：一批日志只投递一次 UI 调用
         if (Interlocked.Exchange(ref _flushPosted, 1) == 0)
         {
-            _dispatcher.BeginInvoke(new Action(FlushLog), DispatcherPriority.Background);
+            UiBridge.Current.Post(FlushLog);
         }
     }
 
@@ -1652,7 +1636,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _wavDumpPath = _settings.WavDumpPath;
         _phoneVolumePercent = Math.Clamp(_settings.PhoneVolumePercent, 0, 100);
         _closeToTray = _settings.CloseToTray;
-        App.CloseToTray = _settings.CloseToTray;
+        ShellSettings.CloseToTray = _settings.CloseToTray;
         _enableMic = _settings.EnableMic;
 
         SelectedDevice = null;
@@ -1699,11 +1683,4 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public void Dispose() => Shutdown();
-
-    private static Brush Frozen(byte r, byte g, byte b)
-    {
-        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-        brush.Freeze();
-        return brush;
-    }
 }

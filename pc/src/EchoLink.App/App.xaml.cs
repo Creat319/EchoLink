@@ -14,7 +14,11 @@ public partial class App : Application
     /// 点关闭时是收进托盘还是真退出。由设置界面写入，关闭窗口时读。
     /// 走静态属性而不是每次读配置文件：关闭动作要即时、不能因为磁盘 I/O 卡一下。
     /// </summary>
-    public static bool CloseToTray { get; set; } = true;
+    public static bool CloseToTray
+    {
+        get => ShellSettings.CloseToTray;
+        set => ShellSettings.CloseToTray = value;
+    }
 
     /// <summary>已经决定退出（托盘菜单点了「退出」）。这时关闭窗口不再拦截。</summary>
     public bool IsExiting { get; private set; }
@@ -23,6 +27,10 @@ public partial class App : Application
     {
         // 窗口只是隐藏时不能退出：托盘里还要能点回来
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+        // 必须在 base.OnStartup（会创建 StartupUri 窗口）之前把桥装好：
+        // ViewModel 的构造与首帧刷新都会用到它。
+        UiBridge.Current = new WpfUiBridge(Dispatcher);
 
         // 先把兜底挂上，再让 base 去创建 StartupUri：
         // 这样 XAML 解析/依赖注入阶段的异常才有机会落盘，否则进程会静默退出。

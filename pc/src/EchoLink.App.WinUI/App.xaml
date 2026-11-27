@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="EchoLink.App.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:EchoLink.App.WinUI">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 颜色与样式放在 App 级：UserControl（MetricRowControl）里也要能解析到 -->
+            <SolidColorBrush x:Key="BodyBrush" Color="#E4EBF2" />
+            <SolidColorBrush x:Key="MutedBrush" Color="#93A4B8" />
+            <SolidColorBrush x:Key="CardBgBrush" Color="#121A24" />
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#1C2733" />
+            <SolidColorBrush x:Key="InsetBrush" Color="#0C121A" />
+            <SolidColorBrush x:Key="AccentBrush" Color="#64D2FF" />
+            <SolidColorBrush x:Key="GreenBrush" Color="#7EE2B8" />
+            <SolidColorBrush x:Key="AmberBrush" Color="#FFC46B" />
+
+            <local:BoolToVisibilityConverter x:Key="BoolToVis" />
+            <local:HexToBrushConverter x:Key="HexToBrush" />
+            <local:BoolToBrushConverter x:Key="BoolToBrush" />
+
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="Padding" Value="16" />
+                <Setter Property="Margin" Value="0,0,0,12" />
+            </Style>
+
+            <Style x:Key="SectionStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                <Setter Property="Margin" Value="0,0,0,10" />
+            </Style>
+
+            <Style x:Key="HintStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -39,6 +39,8 @@
   <ItemGroup>
     <!-- NAudio 由 Core 的 PackageReference 传递过来，此处不再重复声明 -->
     <ProjectReference Include="..\..\src\EchoLink.Core\EchoLink.Core.csproj" />
+    <!-- ViewModel / 配置 / 模型在共用库里，与 WinUI 版共用同一份 -->
+    <ProjectReference Include="..\EchoLink.App.Shared\EchoLink.App.Shared.csproj" />
   </ItemGroup>
 
 </Project>
