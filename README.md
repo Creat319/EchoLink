@@ -98,6 +98,22 @@ flowchart LR
 
 ### 1. PC 端
 
+**方式 A：装安装包（推荐给普通用户）**
+
+```powershell
+.\scripts\build-installer.cmd    # 产出 artifacts\EchoLink-Setup-<版本>.exe（单文件）
+```
+
+双击安装即可。安装器会：
+
+1. 检查系统是否已有 **.NET 8 桌面运行时**
+   - 有 → 直接跳过，几秒装完
+   - 没有 → 自动静默装好随包携带的运行时（约 1–2 分钟）
+2. 把客户端装到 `Program Files\EchoLink`，写入开始菜单和卸载项
+3. **桌面快捷方式是一个可勾选项**，装在向导的「附加任务」页
+
+**方式 B：从源码构建**
+
 ```powershell
 git clone <this-repo> && cd EchoLink
 .\scripts\build-pc.ps1            # 产出 artifacts\pc\EchoLink.App.exe
@@ -105,6 +121,9 @@ git clone <this-repo> && cd EchoLink
 ```
 
 > 需要 .NET 8 Desktop Runtime。想完全免安装：`.\scripts\build-pc.ps1 -SelfContained`。
+>
+> 构建安装器需要 [Inno Setup 7](https://jrsoftware.org/isdl.php)；
+> 首次构建会自动下载 .NET 运行时安装包（约 56 MB，只需一次）。
 
 ### 2. 手机端
 

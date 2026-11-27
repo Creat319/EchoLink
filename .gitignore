@@ -42,3 +42,8 @@ Thumbs.db
 
 # WinUI 发布产物（体积大，不入库）
 /artifacts/pc-winui/
+
+# 安装器：运行时安装包与产物不入库（体积大/可重新生成）
+/pc/installer/runtime/
+/pc/installer/dist/
+/artifacts/EchoLink-Setup-*.exe
